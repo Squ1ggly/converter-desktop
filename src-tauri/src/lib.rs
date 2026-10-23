@@ -14,7 +14,7 @@ mod video_conversion;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use tauri::{App, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{App, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_log::{Target, TargetKind};
 
 use crate::ffmpeg::Ffmpeg;
@@ -31,6 +31,13 @@ const TRAFFIC_LIGHT_POSITION: (f64, f64) = (18.0, 27.0);
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Must be registered first. A second launch focuses the open window instead
+        // of starting another copy, which would clear this one's scratch folder.
+        .plugin(tauri_plugin_single_instance::init(
+            |app, _arguments, _working_directory| {
+                focus_main_window(app);
+            },
+        ))
         .plugin(
             // Logs go to the per-user log folder (e.g. ~/Library/Logs/<app id>
             // on macOS, %LOCALAPPDATA%\<app id>\logs on Windows).
@@ -109,4 +116,12 @@ fn prepare_scratch_root(app: &App) -> Result<PathBuf, Box<dyn std::error::Error>
     std::fs::create_dir_all(&scratch_root)?;
 
     Ok(scratch_root)
+}
+
+fn focus_main_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
+        return;
+    };
+    let _ = window.unminimize();
+    let _ = window.set_focus();
 }
