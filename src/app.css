@@ -1,0 +1,231 @@
+/* ─── Design tokens ───────────────────────────────────────────────────────
+   Every colour, radius and duration used by the components lives here.
+   Dark mode follows the operating system setting. */
+:root {
+  color-scheme: light dark;
+
+  --color-window: #f5f5f7;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #ededf1;
+  --color-surface-hover: #f0f0f4;
+  --color-border: #e2e2e8;
+  --color-border-strong: #c9c9d3;
+  --color-text: #1c1c22;
+  --color-text-secondary: #5c5c6b;
+  --color-text-tertiary: #8b8b99;
+  --color-accent: #5b4fe0;
+  --color-accent-hover: #4b40cc;
+  --color-accent-subtle: rgb(91 79 224 / 0.1);
+  --color-on-accent: #ffffff;
+  --color-success: #17864a;
+  --color-danger: #c93030;
+  --color-danger-subtle: rgb(201 48 48 / 0.09);
+  --color-overlay: rgb(245 245 247 / 0.86);
+
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 1px rgb(0 0 0 / 0.04);
+  --focus-ring: 0 0 0 3px rgb(91 79 224 / 0.35);
+
+  --radius-small: 6px;
+  --radius-medium: 8px;
+  --radius-large: 12px;
+
+  --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
+  --font-size-small: 12px;
+  --font-size-body: 13px;
+  --font-size-title: 15px;
+  --font-size-heading: 20px;
+
+  --duration-quick: 120ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  --toolbar-height: 52px;
+  --settings-panel-width: 340px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-window: #18181d;
+    --color-surface: #212128;
+    --color-surface-sunken: #141418;
+    --color-surface-hover: #2a2a33;
+    --color-border: #2e2e38;
+    --color-border-strong: #41414e;
+    --color-text: #ececf1;
+    --color-text-secondary: #a6a6b5;
+    --color-text-tertiary: #737385;
+    --color-accent: #7c71f6;
+    --color-accent-hover: #8f86ff;
+    --color-accent-subtle: rgb(124 113 246 / 0.18);
+    --color-success: #4cc282;
+    --color-danger: #f06363;
+    --color-danger-subtle: rgb(240 99 99 / 0.12);
+    --color-overlay: rgb(24 24 29 / 0.86);
+    --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4);
+    --focus-ring: 0 0 0 3px rgb(124 113 246 / 0.45);
+  }
+}
+
+/* ─── Reset & base ────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  background: var(--color-window);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  /* Desktop apps don't let you select their chrome like a web page. Text
+     worth copying (file names, errors, paths) opts back in. */
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────────────── */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-raised);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--duration-quick) var(--easing-standard);
+}
+
+.button:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.button:disabled {
+  opacity: 0.5;
+}
+
+.button--primary {
+  border-color: transparent;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.button--primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.button--large {
+  height: 38px;
+  padding: 0 18px;
+  font-size: var(--font-size-title);
+  border-radius: var(--radius-medium);
+}
+
+.button--quiet {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition: background var(--duration-quick) var(--easing-standard);
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.shortcut-hint {
+  font-size: var(--font-size-small);
+  opacity: 0.7;
+  font-weight: 400;
+}
+
+/* ─── Form fields ─────────────────────────────────────────────────────── */
+.field {
+  display: grid;
+  gap: 8px;
+  border: none;
+  min-width: 0;
+}
+
+.field-label {
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.field-help {
+  font-size: var(--font-size-small);
+  color: var(--color-text-tertiary);
+}
+
+.text-input,
+.select-input {
+  height: 30px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+}
+
+.select-input {
+  width: 100%;
+}
