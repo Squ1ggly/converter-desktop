@@ -23,6 +23,11 @@ use crate::state::{ActiveBatches, AppState, ProducedOutputs};
 // Must match the window listed in capabilities/default.json.
 const MAIN_WINDOW_LABEL: &str = "main";
 
+// Centres the window buttons in the 52px toolbar (h-13 in Toolbar.svelte).
+// Measured: macOS offsets the buttons from this point, so it isn't (52 - 14) / 2.
+#[cfg(target_os = "macos")]
+const TRAFFIC_LIGHT_POSITION: (f64, f64) = (18.0, 25.0);
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -30,7 +35,10 @@ pub fn run() {
             // Logs go to the per-user log folder (e.g. ~/Library/Logs/<app id>
             // on macOS, %LOCALAPPDATA%\<app id>\logs on Windows).
             tauri_plugin_log::Builder::new()
-                .targets([Target::new(TargetKind::LogDir { file_name: None }), Target::new(TargetKind::Stdout)])
+                .targets([
+                    Target::new(TargetKind::LogDir { file_name: None }),
+                    Target::new(TargetKind::Stdout),
+                ])
                 .level(log::LevelFilter::Info)
                 .build(),
         )
@@ -63,12 +71,15 @@ fn create_main_window(app: &App) -> tauri::Result<()> {
         .inner_size(1080.0, 720.0)
         .min_inner_size(760.0, 540.0);
 
-    // Lets the app draw its own toolbar under the traffic-light buttons, as
-    // native macOS apps do.
+    // The app's toolbar sits under the window buttons, like native macOS apps.
     #[cfg(target_os = "macos")]
     let window_builder = window_builder
         .title_bar_style(tauri::TitleBarStyle::Overlay)
-        .hidden_title(true);
+        .hidden_title(true)
+        .traffic_light_position(tauri::LogicalPosition::new(
+            TRAFFIC_LIGHT_POSITION.0,
+            TRAFFIC_LIGHT_POSITION.1,
+        ));
 
     window_builder.build()?;
     Ok(())
