@@ -2,6 +2,7 @@
   import * as Field from "$lib/components/ui/field/index.js";
   import * as ToggleGroup from "$lib/components/ui/toggle-group/index.js";
   import type { FormatOption } from "$lib/backend";
+  import { SELECTED_TOGGLE_CLASS } from "$lib/styles";
 
   interface Props {
     label: string;
@@ -38,7 +39,7 @@
       <ToggleGroup.Item
         value={option.id}
         title={option.description}
-        class="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+        class={SELECTED_TOGGLE_CLASS}
       >
         {option.label}
       </ToggleGroup.Item>

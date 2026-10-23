@@ -1,6 +1,5 @@
 <script lang="ts">
   import ArrowRightIcon from "@lucide/svelte/icons/arrow-right";
-  import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
   import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
   import FileImageIcon from "@lucide/svelte/icons/file-image";
   import FilePlayIcon from "@lucide/svelte/icons/file-play";
@@ -74,7 +73,7 @@
       <span class="text-muted-foreground w-9 text-right text-xs tabular-nums">{progressPercent}%</span>
     {:else if item.status === "done" && item.outputPath}
       {@const outputPath = item.outputPath}
-      <CircleCheckIcon class="text-muted-foreground size-4" aria-label="Done" />
+      <Badge variant="secondary">Done</Badge>
       <IconAction label="Open" onclick={() => onOpen(outputPath)}>
         <ExternalLinkIcon />
       </IconAction>
