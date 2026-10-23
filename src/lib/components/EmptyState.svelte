@@ -1,142 +1,56 @@
 <script lang="ts">
-  import { FolderOpen, ImagePlus, ShieldCheck } from "@lucide/svelte";
+  import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
+  import ImagePlusIcon from "@lucide/svelte/icons/image-plus";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import * as Empty from "$lib/components/ui/empty/index.js";
+  import ShortcutHint from "./ShortcutHint.svelte";
 
   interface Props {
     imageExtensions: string[];
     videoExtensions: string[];
-    addShortcutLabel: string;
+    platform: string;
     onChooseFiles: () => void;
     onChooseFolder: () => void;
   }
 
-  let { imageExtensions, videoExtensions, addShortcutLabel, onChooseFiles, onChooseFolder }: Props = $props();
+  let { imageExtensions, videoExtensions, platform, onChooseFiles, onChooseFolder }: Props = $props();
 
-  // "jpeg" and "jpg" (and "tif"/"tiff", "heif"/"heic") are the same format to a
-  // reader; list each one once.
-  const HIDDEN_ALIASES = new Set(["jpeg", "tif", "heif", "mpeg", "m2ts"]);
+  // Alternate spellings of a format listed elsewhere (jpeg = jpg, tif = tiff).
+  const ALIAS_EXTENSIONS = new Set(["jpeg", "tif", "heif", "mpeg", "m2ts"]);
 
-  function describeExtensions(extensions: string[]): string {
-    const visibleExtensions = extensions.filter((extension) => !HIDDEN_ALIASES.has(extension));
-    const description = visibleExtensions.map((extension) => extension.toUpperCase()).join(", ");
-    return description;
+  function listExtensions(extensions: string[]): string {
+    const visibleExtensions = extensions.filter((extension) => !ALIAS_EXTENSIONS.has(extension));
+    const extensionList = visibleExtensions.map((extension) => extension.toUpperCase()).join(", ");
+    return extensionList;
   }
 </script>
 
-<section class="empty-state">
-  <div class="drop-target">
-    <div class="icon-badge" aria-hidden="true">
-      <ImagePlus size={28} strokeWidth={1.75} />
-    </div>
-    <h2 class="heading">Drop images or videos here</h2>
-    <p class="subheading">Or choose them yourself. Folders work too.</p>
-
-    <div class="actions">
-      <button type="button" class="button button--primary button--large" onclick={onChooseFiles}>
-        Choose files…
-        <span class="shortcut-hint">{addShortcutLabel}O</span>
-      </button>
-      <button type="button" class="button button--large" onclick={onChooseFolder}>
-        <FolderOpen size={16} aria-hidden="true" />
-        Choose a folder…
-      </button>
-    </div>
-  </div>
-
-  <dl class="supported-formats">
-    <div>
-      <dt>Images</dt>
-      <dd>{describeExtensions(imageExtensions)}</dd>
-    </div>
-    <div>
-      <dt>Videos</dt>
-      <dd>{describeExtensions(videoExtensions)}</dd>
-    </div>
-  </dl>
-
-  <p class="privacy-note">
-    <ShieldCheck size={14} aria-hidden="true" />
-    Everything is converted on this computer. Nothing is uploaded.
-  </p>
-</section>
-
-<style>
-  .empty-state {
-    display: grid;
-    align-content: center;
-    justify-items: center;
-    gap: 24px;
-    height: 100%;
-    padding: 32px;
-    overflow-y: auto;
-  }
-
-  .drop-target {
-    display: grid;
-    justify-items: center;
-    gap: 8px;
-    width: min(560px, 100%);
-    padding: 48px 32px;
-    border: 2px dashed var(--color-border-strong);
-    border-radius: var(--radius-large);
-    background: var(--color-surface);
-    text-align: center;
-  }
-
-  .icon-badge {
-    display: grid;
-    place-items: center;
-    width: 56px;
-    height: 56px;
-    margin-bottom: 8px;
-    border-radius: 16px;
-    background: var(--color-accent-subtle);
-    color: var(--color-accent);
-  }
-
-  .heading {
-    font-size: var(--font-size-heading);
-    font-weight: 600;
-  }
-
-  .subheading {
-    color: var(--color-text-secondary);
-  }
-
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px;
-    margin-top: 16px;
-  }
-
-  .supported-formats {
-    display: grid;
-    gap: 6px;
-    width: min(560px, 100%);
-    font-size: var(--font-size-small);
-  }
-
-  .supported-formats div {
-    display: grid;
-    grid-template-columns: 56px 1fr;
-    gap: 8px;
-  }
-
-  .supported-formats dt {
-    font-weight: 600;
-    color: var(--color-text-secondary);
-  }
-
-  .supported-formats dd {
-    color: var(--color-text-tertiary);
-  }
-
-  .privacy-note {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: var(--font-size-small);
-    color: var(--color-text-tertiary);
-  }
-</style>
+<div class="flex h-full items-center justify-center p-8">
+  <Empty.Root class="max-w-xl border border-dashed">
+    <Empty.Header>
+      <Empty.Media variant="icon">
+        <ImagePlusIcon />
+      </Empty.Media>
+      <Empty.Title>Drop images or videos</Empty.Title>
+      <Empty.Description>Or choose files. Folders work too.</Empty.Description>
+    </Empty.Header>
+    <Empty.Content>
+      <div class="flex gap-2">
+        <Button onclick={onChooseFiles}>
+          Choose files
+          <ShortcutHint shortcut="open" {platform} />
+        </Button>
+        <Button variant="outline" onclick={onChooseFolder}>
+          <FolderOpenIcon />
+          Choose folder
+        </Button>
+      </div>
+      <dl class="text-muted-foreground mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-left text-xs">
+        <dt class="text-foreground font-medium">Images</dt>
+        <dd>{listExtensions(imageExtensions)}</dd>
+        <dt class="text-foreground font-medium">Videos</dt>
+        <dd>{listExtensions(videoExtensions)}</dd>
+      </dl>
+    </Empty.Content>
+  </Empty.Root>
+</div>

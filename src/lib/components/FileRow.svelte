@@ -1,7 +1,18 @@
 <script lang="ts">
-  import { ArrowRight, Ban, CircleAlert, CircleCheck, ExternalLink, FileImage, FilePlay, FolderSearch, X } from "@lucide/svelte";
-  import { extensionOf, formatBytes } from "../lib/formatting";
-  import type { QueueItem } from "../lib/queue.svelte";
+  import ArrowRightIcon from "@lucide/svelte/icons/arrow-right";
+  import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
+  import ExternalLinkIcon from "@lucide/svelte/icons/external-link";
+  import FileImageIcon from "@lucide/svelte/icons/file-image";
+  import FilePlayIcon from "@lucide/svelte/icons/file-play";
+  import FolderSearchIcon from "@lucide/svelte/icons/folder-search";
+  import XIcon from "@lucide/svelte/icons/x";
+  import { Badge } from "$lib/components/ui/badge/index.js";
+  import * as Item from "$lib/components/ui/item/index.js";
+  import { Progress } from "$lib/components/ui/progress/index.js";
+  import { Spinner } from "$lib/components/ui/spinner/index.js";
+  import { extensionOf, formatBytes } from "$lib/formatting";
+  import type { QueueItem } from "$lib/queue.svelte";
+  import IconAction from "./IconAction.svelte";
 
   interface Props {
     item: QueueItem;
@@ -22,211 +33,58 @@
   const progressPercent = $derived(Math.round(item.progressPercent ?? 0));
 </script>
 
-<li class="file-row" class:file-row--failed={item.status === "failed"}>
-  <div class="thumbnail" aria-hidden="true">
+<Item.Root size="sm" class={item.status === "failed" ? "bg-destructive/5" : ""} data-testid="file-row" data-status={item.status}>
+  <Item.Media variant="image" class="bg-muted text-muted-foreground">
     {#if showsPreview}
       <img src={item.previewUrl} alt="" loading="lazy" decoding="async" onerror={() => (hasPreviewFailed = true)} />
     {:else if item.kind === "image"}
-      <FileImage size={20} />
+      <FileImageIcon class="size-5" />
     {:else}
-      <FilePlay size={20} />
+      <FilePlayIcon class="size-5" />
     {/if}
-  </div>
+  </Item.Media>
 
-  <div class="details">
-    <p class="file-name selectable" title={item.path}>{item.name}</p>
+  <Item.Content class="min-w-0">
+    <Item.Title class="block w-full truncate select-text" title={item.path}>{item.name}</Item.Title>
     {#if item.status === "failed" && item.errorMessage}
-      <p class="error-message selectable" role="alert">{item.errorMessage}</p>
+      <Item.Description class="text-destructive select-text" role="alert">{item.errorMessage}</Item.Description>
     {:else}
-      <p class="meta">
-        <span>{formatBytes(item.sizeBytes)}</span>
-        <span class="conversion-label">
+      <Item.Description class="flex items-center gap-2 tabular-nums">
+        {formatBytes(item.sizeBytes)}
+        <span class="inline-flex items-center gap-1">
           {sourceLabel}
-          <ArrowRight size={11} aria-label="to" />
+          <ArrowRightIcon class="size-3" aria-label="to" />
           {targetLabel}
         </span>
-      </p>
+      </Item.Description>
     {/if}
-  </div>
+  </Item.Content>
 
-  <div class="status">
+  <Item.Actions class="min-w-28 justify-end">
     {#if item.status === "ready"}
-      <button type="button" class="icon-button" onclick={() => onRemove(item.id)} disabled={isLocked} aria-label="Remove {item.name}" title="Remove">
-        <X size={16} />
-      </button>
+      <IconAction label="Remove" disabled={isLocked} onclick={() => onRemove(item.id)}>
+        <XIcon />
+      </IconAction>
     {:else if item.status === "waiting"}
-      <span class="status-text">Waiting</span>
+      <span class="text-muted-foreground text-xs">Queued</span>
+    {:else if item.status === "converting" && item.progressPercent === null}
+      <Spinner aria-label="Converting" />
     {:else if item.status === "converting"}
-      {#if item.progressPercent === null}
-        <div class="progress-track progress-track--indeterminate" role="progressbar" aria-label="Converting {item.name}">
-          <div class="progress-fill"></div>
-        </div>
-      {:else}
-        <div class="progress-track" role="progressbar" aria-label="Converting {item.name}" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100}>
-          <div class="progress-fill" style:width="{progressPercent}%"></div>
-        </div>
-        <span class="status-text percent">{progressPercent}%</span>
-      {/if}
+      <Progress value={progressPercent} class="w-20" aria-label="Converting" />
+      <span class="text-muted-foreground w-9 text-right text-xs tabular-nums">{progressPercent}%</span>
     {:else if item.status === "done" && item.outputPath}
       {@const outputPath = item.outputPath}
-      <CircleCheck class="done-icon" size={16} aria-label="Converted" />
-      <button type="button" class="icon-button" onclick={() => onOpen(outputPath)} aria-label="Open converted {item.name}" title="Open">
-        <ExternalLink size={16} />
-      </button>
-      <button type="button" class="icon-button" onclick={() => onReveal(outputPath)} aria-label="{revealLabel}: {item.name}" title={revealLabel}>
-        <FolderSearch size={16} />
-      </button>
+      <CircleCheckIcon class="text-muted-foreground size-4" aria-label="Done" />
+      <IconAction label="Open" onclick={() => onOpen(outputPath)}>
+        <ExternalLinkIcon />
+      </IconAction>
+      <IconAction label={revealLabel} onclick={() => onReveal(outputPath)}>
+        <FolderSearchIcon />
+      </IconAction>
     {:else if item.status === "failed"}
-      <span class="status-text status-text--failed">
-        <CircleAlert size={14} aria-hidden="true" />
-        Failed
-      </span>
+      <Badge variant="destructive">Failed</Badge>
     {:else if item.status === "cancelled"}
-      <span class="status-text">
-        <Ban size={14} aria-hidden="true" />
-        Cancelled
-      </span>
+      <Badge variant="secondary">Cancelled</Badge>
     {/if}
-  </div>
-</li>
-
-<style>
-  .file-row {
-    display: grid;
-    grid-template-columns: 40px 1fr auto;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    border-radius: var(--radius-medium);
-  }
-
-  .file-row:hover {
-    background: var(--color-surface-hover);
-  }
-
-  .file-row--failed {
-    background: var(--color-danger-subtle);
-  }
-
-  .thumbnail {
-    display: grid;
-    place-items: center;
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-small);
-    background: var(--color-surface-sunken);
-    color: var(--color-text-tertiary);
-    overflow: hidden;
-  }
-
-  .thumbnail img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .details {
-    min-width: 0;
-  }
-
-  .file-name {
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .meta {
-    display: flex;
-    gap: 10px;
-    font-size: var(--font-size-small);
-    color: var(--color-text-tertiary);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .conversion-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-  }
-
-  .error-message {
-    font-size: var(--font-size-small);
-    color: var(--color-danger);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    line-clamp: 2;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-
-  .status {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    min-width: 96px;
-  }
-
-  .status-text {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: var(--font-size-small);
-    color: var(--color-text-tertiary);
-  }
-
-  .status-text--failed {
-    color: var(--color-danger);
-    font-weight: 500;
-  }
-
-  .percent {
-    width: 34px;
-    justify-content: flex-end;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .status :global(.done-icon) {
-    color: var(--color-success);
-    margin-right: 2px;
-  }
-
-  .progress-track {
-    width: 88px;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--color-surface-sunken);
-    overflow: hidden;
-  }
-
-  .progress-fill {
-    height: 100%;
-    border-radius: inherit;
-    background: var(--color-accent);
-    transition: width 200ms var(--easing-standard);
-  }
-
-  .progress-track--indeterminate .progress-fill {
-    width: 40%;
-    animation: slide 1.1s ease-in-out infinite;
-  }
-
-  @keyframes slide {
-    from {
-      transform: translateX(-100%);
-    }
-    to {
-      transform: translateX(250%);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .progress-track--indeterminate .progress-fill {
-      animation: none;
-      width: 100%;
-      opacity: 0.5;
-    }
-  }
-</style>
+  </Item.Actions>
+</Item.Root>

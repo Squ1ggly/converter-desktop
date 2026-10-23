@@ -1,6 +1,6 @@
-import type { ConversionRequest, ConversionSettings, MediaKind } from "./backend";
-import type { Preferences } from "./preferences.svelte";
-import type { QueueItem } from "./queue.svelte";
+import type { ConversionRequest, ConversionSettings, MediaKind } from "$lib/backend";
+import type { Preferences } from "$lib/preferences.svelte";
+import type { QueueItem } from "$lib/queue.svelte";
 
 function buildSettings(kind: MediaKind, preferences: Preferences): ConversionSettings {
   if (kind === "image") {

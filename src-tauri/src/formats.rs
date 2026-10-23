@@ -11,7 +11,8 @@ const IMAGE_INPUT_EXTENSIONS: &[&str] = &[
 ];
 
 const VIDEO_INPUT_EXTENSIONS: &[&str] = &[
-    "3gp", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "ogv", "ts", "webm", "wmv",
+    "3gp", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "ogv", "ts",
+    "webm", "wmv",
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,23 +96,27 @@ impl ImageFormat {
 
     fn description(self) -> &'static str {
         match self {
-            ImageFormat::Jpg => "Best for photos. Small files that open anywhere. No transparency.",
-            ImageFormat::Png => "Lossless, keeps transparency. Best for screenshots and graphics.",
-            ImageFormat::Webp => "Modern web format. Smaller than JPG, keeps transparency.",
-            ImageFormat::Avif => "Smallest files at high quality. Supported by modern browsers.",
-            ImageFormat::Heic => "Apple's photo format. Small files, best on Apple devices.",
-            ImageFormat::Gif => "Limited to 256 colours. Use for simple graphics.",
-            ImageFormat::Bmp => "Uncompressed. Large files, for older software.",
-            ImageFormat::Tiff => "Lossless, used for printing and archiving.",
-            ImageFormat::Pdf => "Puts each image on its own page-sized PDF.",
-            ImageFormat::Svg => "Traces the image into vector shapes. Best for logos and icons.",
+            ImageFormat::Jpg => "Photos. Opens anywhere. No transparency.",
+            ImageFormat::Png => "Lossless. Keeps transparency.",
+            ImageFormat::Webp => "Smaller than JPG. Keeps transparency.",
+            ImageFormat::Avif => "Smallest files. Modern browsers only.",
+            ImageFormat::Heic => "Apple photo format.",
+            ImageFormat::Gif => "256 colours. Simple graphics.",
+            ImageFormat::Bmp => "Uncompressed. Large files.",
+            ImageFormat::Tiff => "Lossless. Print and archiving.",
+            ImageFormat::Pdf => "One page per image.",
+            ImageFormat::Svg => "Traced to vector shapes. Logos and icons.",
         }
     }
 
     pub fn uses_quality(self) -> bool {
         matches!(
             self,
-            ImageFormat::Jpg | ImageFormat::Webp | ImageFormat::Avif | ImageFormat::Heic | ImageFormat::Pdf
+            ImageFormat::Jpg
+                | ImageFormat::Webp
+                | ImageFormat::Avif
+                | ImageFormat::Heic
+                | ImageFormat::Pdf
         )
     }
 
@@ -163,14 +168,14 @@ impl VideoFormat {
 
     fn description(self) -> &'static str {
         match self {
-            VideoFormat::Mp4 => "Plays almost everywhere. The safe choice.",
-            VideoFormat::Mov => "Apple's QuickTime format. Good for editing on a Mac.",
-            VideoFormat::Mkv => "Flexible container, popular for archiving.",
-            VideoFormat::Webm => "Open web format. Small files for websites.",
-            VideoFormat::M4v => "Apple's MP4 variant, for iTunes and Apple TV.",
-            VideoFormat::Avi => "Older Windows format, for legacy players.",
+            VideoFormat::Mp4 => "Plays almost everywhere.",
+            VideoFormat::Mov => "QuickTime. Common on Mac.",
+            VideoFormat::Mkv => "Flexible container.",
+            VideoFormat::Webm => "Open web format. Small files.",
+            VideoFormat::M4v => "Apple's MP4 variant.",
+            VideoFormat::Avi => "Legacy Windows format.",
             VideoFormat::Flv => "Legacy Flash video.",
-            VideoFormat::Gif => "Silent animated image. Large files, keep clips short.",
+            VideoFormat::Gif => "Silent animation. Keep clips short.",
         }
     }
 }
@@ -254,7 +259,10 @@ mod tests {
 
     #[test]
     fn classifies_by_extension_case_insensitively() {
-        assert_eq!(classify_path(Path::new("/photos/IMG_0001.HEIC")), Some(MediaKind::Image));
+        assert_eq!(
+            classify_path(Path::new("/photos/IMG_0001.HEIC")),
+            Some(MediaKind::Image)
+        );
         assert_eq!(classify_path(Path::new("clip.MoV")), Some(MediaKind::Video));
         assert_eq!(classify_path(Path::new("notes.txt")), None);
         assert_eq!(classify_path(Path::new("no-extension")), None);
@@ -263,7 +271,10 @@ mod tests {
     #[test]
     fn heic_output_is_only_offered_on_macos() {
         let catalog = build_catalog();
-        let offers_heic = catalog.image_outputs.iter().any(|option| option.id == ImageFormat::Heic);
+        let offers_heic = catalog
+            .image_outputs
+            .iter()
+            .any(|option| option.id == ImageFormat::Heic);
         assert_eq!(offers_heic, cfg!(target_os = "macos"));
     }
 }

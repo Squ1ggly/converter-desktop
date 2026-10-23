@@ -1,8 +1,11 @@
 <script lang="ts">
-  import type { FormatOption, ResizeOption } from "../lib/backend";
-  import type { Preferences } from "../lib/preferences.svelte";
+  import * as Field from "$lib/components/ui/field/index.js";
+  import * as InputGroup from "$lib/components/ui/input-group/index.js";
+  import { Slider } from "$lib/components/ui/slider/index.js";
+  import type { FormatOption, ResizeOption } from "$lib/backend";
+  import type { Preferences } from "$lib/preferences.svelte";
   import FormatPicker from "./FormatPicker.svelte";
-  import SegmentedControl from "./SegmentedControl.svelte";
+  import OptionToggle from "./OptionToggle.svelte";
 
   interface Props {
     formatOptions: FormatOption[];
@@ -17,7 +20,7 @@
   const RESIZE_MODES: { value: ResizeMode; label: string }[] = [
     { value: "original", label: "Original" },
     { value: "percent", label: "Scale" },
-    { value: "fit", label: "Fit within" },
+    { value: "fit", label: "Fit" },
   ];
   const DEFAULT_SCALE_PERCENT = 50;
   const MIN_SCALE_PERCENT = 1;
@@ -36,27 +39,26 @@
     return { mode: "original" };
   }
 
-  // Empty or invalid number fields mean "no limit".
-  function toPositiveWholeNumber(value: number | null | undefined): number | null {
-    const isUsable = typeof value === "number" && Number.isFinite(value) && value >= 1;
+  // Blank or invalid number fields mean "no limit".
+  function parsePositiveWholeNumber(text: string): number | null {
+    const parsedNumber = Number.parseInt(text, 10);
+    const isUsable = Number.isFinite(parsedNumber) && parsedNumber >= 1;
     if (!isUsable) {
       return null;
     }
-
-    const wholeNumber = Math.round(value);
-    return wholeNumber;
+    return parsedNumber;
   }
 
-  function setPercent(value: number | null): void {
-    const percent = toPositiveWholeNumber(value) ?? DEFAULT_SCALE_PERCENT;
+  function setPercent(text: string): void {
+    const percent = parsePositiveWholeNumber(text) ?? DEFAULT_SCALE_PERCENT;
     const clampedPercent = Math.min(MAX_SCALE_PERCENT, Math.max(MIN_SCALE_PERCENT, percent));
     preferences.resize = { mode: "percent", percent: clampedPercent };
   }
 
-  function setFitSide(side: "maxWidth" | "maxHeight", value: number | null): void {
+  function setFitSide(side: "maxWidth" | "maxHeight", text: string): void {
     const currentFit: FitResize =
       preferences.resize.mode === "fit" ? preferences.resize : { mode: "fit", maxWidth: null, maxHeight: null };
-    const sideLimit = toPositiveWholeNumber(value);
+    const sideLimit = parsePositiveWholeNumber(text);
 
     const updatedFit: FitResize =
       side === "maxWidth" ? { ...currentFit, maxWidth: sideLimit } : { ...currentFit, maxHeight: sideLimit };
@@ -64,114 +66,74 @@
   }
 </script>
 
-<section class="settings-section" aria-labelledby="image-settings-title">
-  <h2 id="image-settings-title" class="section-title">Images</h2>
-
-  <FormatPicker legend="Convert to" name="image-format" options={formatOptions} bind:value={preferences.imageFormat} />
+<Field.Group>
+  <FormatPicker label="Format" options={formatOptions} bind:value={preferences.imageFormat} />
 
   {#if usesQuality}
-    <div class="field">
-      <div class="quality-header">
-        <label class="field-label" for="image-quality">Quality</label>
-        <output class="quality-value" for="image-quality">{preferences.imageQuality}</output>
+    <Field.Field>
+      <div class="flex items-center justify-between">
+        <Field.Label for="image-quality">Quality</Field.Label>
+        <span class="text-muted-foreground text-sm tabular-nums">{preferences.imageQuality}</span>
       </div>
-      <input id="image-quality" type="range" min="1" max="100" bind:value={preferences.imageQuality} />
-      <div class="range-ends field-help" aria-hidden="true">
-        <span>Smaller file</span>
-        <span>Better quality</span>
+      <Slider id="image-quality" type="single" min={1} max={100} step={1} bind:value={preferences.imageQuality} aria-label="Quality" />
+      <div class="text-muted-foreground flex justify-between text-xs" aria-hidden="true">
+        <span>Smaller</span>
+        <span>Sharper</span>
       </div>
-    </div>
+    </Field.Field>
   {/if}
 
-  <SegmentedControl
-    legend="Size"
-    name="resize-mode"
+  <OptionToggle
+    label="Size"
     options={RESIZE_MODES}
     bind:value={() => preferences.resize.mode, (mode) => (preferences.resize = defaultResizeFor(mode))}
   />
 
   {#if preferences.resize.mode === "percent"}
-    <div class="inline-inputs">
-      <label class="visually-hidden" for="resize-percent">Scale percentage</label>
-      <input
-        id="resize-percent"
-        class="text-input number-input"
-        type="number"
-        min={MIN_SCALE_PERCENT}
-        max={MAX_SCALE_PERCENT}
-        bind:value={() => (preferences.resize.mode === "percent" ? preferences.resize.percent : null), setPercent}
-      />
-      <span class="unit">% of the original size</span>
-    </div>
+    <Field.Field>
+      <Field.Label for="resize-percent" class="sr-only">Scale</Field.Label>
+      <InputGroup.Root class="w-32">
+        <InputGroup.Input
+          id="resize-percent"
+          type="number"
+          min={MIN_SCALE_PERCENT}
+          max={MAX_SCALE_PERCENT}
+          value={preferences.resize.percent}
+          onchange={(event) => setPercent(event.currentTarget.value)}
+        />
+        <InputGroup.Addon align="inline-end">%</InputGroup.Addon>
+      </InputGroup.Root>
+    </Field.Field>
   {:else if preferences.resize.mode === "fit"}
-    <div class="inline-inputs">
-      <label class="visually-hidden" for="resize-width">Maximum width in pixels</label>
-      <input
-        id="resize-width"
-        class="text-input number-input"
-        type="number"
-        min="1"
-        placeholder="Width"
-        bind:value={
-          () => (preferences.resize.mode === "fit" ? preferences.resize.maxWidth : null),
-          (value) => setFitSide("maxWidth", value)
-        }
-      />
-      <span class="unit" aria-hidden="true">×</span>
-      <label class="visually-hidden" for="resize-height">Maximum height in pixels</label>
-      <input
-        id="resize-height"
-        class="text-input number-input"
-        type="number"
-        min="1"
-        placeholder="Height"
-        bind:value={
-          () => (preferences.resize.mode === "fit" ? preferences.resize.maxHeight : null),
-          (value) => setFitSide("maxHeight", value)
-        }
-      />
-      <span class="unit">px</span>
-    </div>
-    <p class="field-help">Keeps the proportions. Leave a side blank to let it follow the other.</p>
+    <Field.Field>
+      <div class="flex items-center gap-2">
+        <Field.Label for="resize-width" class="sr-only">Max width</Field.Label>
+        <InputGroup.Root>
+          <InputGroup.Input
+            id="resize-width"
+            type="number"
+            min={1}
+            placeholder="Width"
+            value={preferences.resize.maxWidth ?? ""}
+            onchange={(event) => setFitSide("maxWidth", event.currentTarget.value)}
+          />
+          <InputGroup.Addon align="inline-end">px</InputGroup.Addon>
+        </InputGroup.Root>
+        <span class="text-muted-foreground" aria-hidden="true">×</span>
+        <Field.Label for="resize-height" class="sr-only">Max height</Field.Label>
+        <InputGroup.Root>
+          <InputGroup.Input
+            id="resize-height"
+            type="number"
+            min={1}
+            placeholder="Height"
+            value={preferences.resize.maxHeight ?? ""}
+            onchange={(event) => setFitSide("maxHeight", event.currentTarget.value)}
+          />
+          <InputGroup.Addon align="inline-end">px</InputGroup.Addon>
+        </InputGroup.Root>
+      </div>
+      <Field.Description>Keeps proportions. Leave a side blank to scale by the other.</Field.Description>
+    </Field.Field>
   {/if}
-</section>
-
-<style>
-  .quality-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-  }
-
-  .quality-value {
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
-  }
-
-  input[type="range"] {
-    width: 100%;
-    accent-color: var(--color-accent);
-  }
-
-  .range-ends {
-    display: flex;
-    justify-content: space-between;
-    margin-top: -4px;
-  }
-
-  .inline-inputs {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: -6px;
-  }
-
-  .number-input {
-    width: 84px;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .unit {
-    color: var(--color-text-secondary);
-  }
-</style>
+</Field.Group>

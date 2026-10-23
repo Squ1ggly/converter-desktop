@@ -1,8 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { ModeWatcher } from "mode-watcher";
+  import { toast } from "svelte-sonner";
   import type { Event as TauriEvent } from "@tauri-apps/api/event";
   import { getCurrentWebview, type DragDropEvent } from "@tauri-apps/api/webview";
   import { open } from "@tauri-apps/plugin-dialog";
+  import { Toaster } from "$lib/components/ui/sonner/index.js";
+  import * as Tooltip from "$lib/components/ui/tooltip/index.js";
+  import DropOverlay from "$lib/components/DropOverlay.svelte";
+  import EmptyState from "$lib/components/EmptyState.svelte";
+  import FileList from "$lib/components/FileList.svelte";
+  import SettingsPanel from "$lib/components/SettingsPanel.svelte";
+  import Toolbar from "$lib/components/Toolbar.svelte";
   import {
     cancelConversion,
     convertFiles,
@@ -12,19 +21,12 @@
     revealOutput,
     type ConversionCatalog,
     type FormatOption,
-  } from "./lib/backend";
-  import { isPrimaryModifierPressed, modifierKeyLabel, pluralise, revealInFolderLabel } from "./lib/formatting";
-  import { PreferenceStore } from "./lib/preferences.svelte";
-  import { FileQueue } from "./lib/queue.svelte";
-  import { buildConversionRequests } from "./lib/requests";
-  import DropOverlay from "./components/DropOverlay.svelte";
-  import EmptyState from "./components/EmptyState.svelte";
-  import FileList from "./components/FileList.svelte";
-  import SettingsPanel from "./components/SettingsPanel.svelte";
-  import Toast from "./components/Toast.svelte";
-  import Toolbar from "./components/Toolbar.svelte";
+  } from "$lib/backend";
+  import { isPrimaryModifierPressed, pluralise, revealInFolderLabel } from "$lib/formatting";
+  import { PreferenceStore } from "$lib/preferences.svelte";
+  import { FileQueue } from "$lib/queue.svelte";
+  import { buildConversionRequests } from "$lib/requests";
 
-  const TOAST_DURATION_MS = 6000;
   const MAX_NAMES_IN_TOAST = 3;
 
   const queue = new FileQueue();
@@ -34,12 +36,10 @@
   let startupError = $state<string | null>(null);
   let hasLoadedPreferences = $state(false);
   let isDraggingFiles = $state(false);
-  let toastMessage = $state<string | null>(null);
   let activeBatchIds = $state<string[]>([]);
   let isCancelling = $state(false);
 
   const platform = $derived(catalog?.platform ?? "");
-  const modifierLabel = $derived(modifierKeyLabel(platform));
   const revealLabel = $derived(revealInFolderLabel(platform));
   const imageTargetLabel = $derived(labelFor(catalog?.imageOutputs, preferenceStore.values.imageFormat));
   const videoTargetLabel = $derived(labelFor(catalog?.videoOutputs, preferenceStore.values.videoFormat));
@@ -54,7 +54,7 @@
     return message;
   }
 
-  // A saved choice may not exist on this machine (HEIC output is macOS-only).
+  // A saved format may not exist on this machine (HEIC output is macOS only).
   function fallBackToAvailableFormats(loadedCatalog: ConversionCatalog): void {
     const preferences = preferenceStore.values;
     const isImageFormatAvailable = loadedCatalog.imageOutputs.some((option) => option.id === preferences.imageFormat);
@@ -79,16 +79,12 @@
     }
   }
 
-  function showToast(message: string): void {
-    toastMessage = message;
-  }
-
   function describeSkippedFiles(skippedNames: string[]): string {
     const listedNames = skippedNames.slice(0, MAX_NAMES_IN_TOAST).join(", ");
     const remainingCount = skippedNames.length - MAX_NAMES_IN_TOAST;
     const remainder = remainingCount > 0 ? ` and ${remainingCount} more` : "";
 
-    const description = `Skipped ${pluralise(skippedNames.length, "file")} that aren't images or videos: ${listedNames}${remainder}.`;
+    const description = `${listedNames}${remainder}`;
     return description;
   }
 
@@ -97,7 +93,7 @@
       return;
     }
     if (queue.isConverting) {
-      showToast("Wait for the current conversion to finish before adding more files.");
+      toast.info("Wait for the current conversion to finish.");
       return;
     }
 
@@ -107,10 +103,12 @@
       const skippedNames = queue.add(inspectedFiles);
 
       if (skippedNames.length > 0) {
-        showToast(describeSkippedFiles(skippedNames));
+        toast.warning(`Skipped ${pluralise(skippedNames.length, "unsupported file")}`, {
+          description: describeSkippedFiles(skippedNames),
+        });
       }
     } catch (error) {
-      showToast(`Couldn't add those files: ${errorMessageOf(error)}`);
+      toast.error("Couldn't add files", { description: errorMessageOf(error) });
     }
   }
 
@@ -133,7 +131,7 @@
   }
 
   async function chooseFolder(): Promise<void> {
-    const chosenPaths = await open({ directory: true, multiple: true, title: "Choose folders to convert" });
+    const chosenPaths = await open({ directory: true, multiple: true, title: "Choose folders" });
     await addPaths(chosenPaths ?? []);
   }
 
@@ -166,7 +164,7 @@
     try {
       await action(path);
     } catch (error) {
-      showToast(errorMessageOf(error));
+      toast.error(errorMessageOf(error));
     }
   }
 
@@ -212,106 +210,71 @@
     };
   });
 
-  // Save preferences whenever they change, but never before the saved ones
-  // have loaded (that would overwrite them with the defaults).
+  // Save on every change, but only after the saved values have loaded.
   $effect(() => {
     if (!hasLoadedPreferences) {
       return;
     }
     preferenceStore.persist();
   });
-
-  $effect(() => {
-    if (!toastMessage) {
-      return;
-    }
-
-    const dismissTimer = setTimeout(() => (toastMessage = null), TOAST_DURATION_MS);
-    return () => clearTimeout(dismissTimer);
-  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
+<ModeWatcher />
+<Toaster position="bottom-center" />
 
-<div class="app">
-  <Toolbar
-    isMac={platform === "macos"}
-    hasFiles={!queue.isEmpty}
-    isConverting={queue.isConverting}
-    addShortcutLabel={modifierLabel}
-    onAddFiles={chooseFiles}
-    onClear={() => queue.clear()}
-  />
+<Tooltip.Provider>
+  <div class="grid h-full grid-rows-[auto_1fr]">
+    <Toolbar
+      isMac={platform === "macos"}
+      hasFiles={!queue.isEmpty}
+      isConverting={queue.isConverting}
+      onAddFiles={chooseFiles}
+      onClear={() => queue.clear()}
+    />
 
-  <main class="content">
-    {#if startupError}
-      <p class="startup-error selectable" role="alert">The app couldn't start: {startupError}</p>
-    {:else if catalog && queue.isEmpty}
-      <EmptyState
-        imageExtensions={catalog.imageInputExtensions}
-        videoExtensions={catalog.videoInputExtensions}
-        addShortcutLabel={modifierLabel}
-        onChooseFiles={chooseFiles}
-        onChooseFolder={chooseFolder}
-      />
-    {:else if catalog}
-      <div class="workspace">
-        <FileList
-          {queue}
-          {imageTargetLabel}
-          {videoTargetLabel}
-          {revealLabel}
-          onRemove={(itemId) => queue.remove(itemId)}
-          onOpen={(path) => runFileAction(openOutput, path)}
-          onReveal={(path) => runFileAction(revealOutput, path)}
+    <main class="min-h-0">
+      {#if startupError}
+        <p class="text-destructive p-8 text-sm select-text" role="alert">Couldn't start: {startupError}</p>
+      {:else if catalog && queue.isEmpty}
+        <EmptyState
+          imageExtensions={catalog.imageInputExtensions}
+          videoExtensions={catalog.videoInputExtensions}
+          {platform}
+          onChooseFiles={chooseFiles}
+          onChooseFolder={chooseFolder}
         />
-        <SettingsPanel
-          {catalog}
-          bind:preferences={preferenceStore.values}
-          hasImages={queue.images.length > 0}
-          hasVideos={queue.videos.length > 0}
-          fileCount={queue.items.length}
-          finishedCount={queue.summary.finishedCount}
-          isConverting={queue.isConverting}
-          {isCancelling}
-          isRerun={queue.hasFinishedRun}
-          shortcutLabel={modifierLabel}
-          onConvert={startConversion}
-          onCancel={cancelActiveConversion}
-        />
-      </div>
-    {/if}
-  </main>
+      {:else if catalog}
+        <div class="grid h-full min-h-0 grid-cols-[1fr_22rem]">
+          <FileList
+            {queue}
+            {imageTargetLabel}
+            {videoTargetLabel}
+            {revealLabel}
+            onRemove={(itemId) => queue.remove(itemId)}
+            onOpen={(path) => runFileAction(openOutput, path)}
+            onReveal={(path) => runFileAction(revealOutput, path)}
+          />
+          <SettingsPanel
+            {catalog}
+            bind:preferences={preferenceStore.values}
+            hasImages={queue.images.length > 0}
+            hasVideos={queue.videos.length > 0}
+            fileCount={queue.items.length}
+            finishedCount={queue.summary.finishedCount}
+            isConverting={queue.isConverting}
+            {isCancelling}
+            isRerun={queue.hasFinishedRun}
+            {platform}
+            onConvert={startConversion}
+            onCancel={cancelActiveConversion}
+          />
+        </div>
+      {/if}
+    </main>
+  </div>
+</Tooltip.Provider>
 
-  {#if isDraggingFiles}
-    <DropOverlay />
-  {/if}
-
-  {#if toastMessage}
-    <Toast message={toastMessage} onDismiss={() => (toastMessage = null)} />
-  {/if}
-</div>
-
-<style>
-  .app {
-    display: grid;
-    grid-template-rows: var(--toolbar-height) 1fr;
-    height: 100%;
-  }
-
-  .content {
-    min-height: 0;
-  }
-
-  .workspace {
-    display: grid;
-    grid-template-columns: 1fr var(--settings-panel-width);
-    height: 100%;
-    min-height: 0;
-  }
-
-  .startup-error {
-    padding: 32px;
-    color: var(--color-danger);
-  }
-</style>
+{#if isDraggingFiles}
+  <DropOverlay />
+{/if}

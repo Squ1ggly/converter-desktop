@@ -45,9 +45,16 @@ export function revealInFolderLabel(platform: string): string {
   return "Show in folder";
 }
 
-export function modifierKeyLabel(platform: string): string {
-  const label = platform === "macos" ? "⌘" : "Ctrl+";
-  return label;
+export type Shortcut = "open" | "convert";
+
+// Key labels as each OS shows them, e.g. ⌘ O on macOS and Ctrl O elsewhere.
+export function shortcutKeys(shortcut: Shortcut, platform: string): string[] {
+  const isMac = platform === "macos";
+  const modifierKey = isMac ? "⌘" : "Ctrl";
+  const enterKey = isMac ? "↩" : "Enter";
+
+  const keys = shortcut === "open" ? [modifierKey, "O"] : [modifierKey, enterKey];
+  return keys;
 }
 
 export function isPrimaryModifierPressed(event: KeyboardEvent, platform: string): boolean {

@@ -1,57 +1,32 @@
 <script lang="ts">
-  import { Plus } from "@lucide/svelte";
+  import PlusIcon from "@lucide/svelte/icons/plus";
+  import { Button } from "$lib/components/ui/button/index.js";
 
   interface Props {
     isMac: boolean;
     hasFiles: boolean;
     isConverting: boolean;
-    addShortcutLabel: string;
     onAddFiles: () => void;
     onClear: () => void;
   }
 
-  let { isMac, hasFiles, isConverting, addShortcutLabel, onAddFiles, onClear }: Props = $props();
+  let { isMac, hasFiles, isConverting, onAddFiles, onClear }: Props = $props();
 </script>
 
-<!-- data-tauri-drag-region lets the window be moved by dragging the toolbar,
-     since on macOS it replaces the native title bar. -->
-<header class="toolbar" class:toolbar--mac={isMac} data-tauri-drag-region>
-  <h1 class="app-title" data-tauri-drag-region>Converter</h1>
+<!-- On macOS this replaces the title bar, so it doubles as the window drag area. -->
+<header
+  class="bg-background flex h-13 shrink-0 items-center justify-between border-b pr-3 {isMac ? 'pl-21' : 'pl-4'}"
+  data-tauri-drag-region
+>
+  <h1 class="text-sm font-semibold" data-tauri-drag-region>Converter</h1>
 
   {#if hasFiles}
-    <div class="actions">
-      <button type="button" class="button button--quiet" onclick={onClear} disabled={isConverting}>Clear list</button>
-      <button type="button" class="button" onclick={onAddFiles} disabled={isConverting} title="Add files ({addShortcutLabel}O)">
-        <Plus size={14} aria-hidden="true" />
+    <div class="flex gap-2">
+      <Button variant="ghost" size="sm" onclick={onClear} disabled={isConverting}>Clear</Button>
+      <Button variant="outline" size="sm" onclick={onAddFiles} disabled={isConverting}>
+        <PlusIcon />
         Add files
-      </button>
+      </Button>
     </div>
   {/if}
 </header>
-
-<style>
-  .toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: var(--toolbar-height);
-    padding: 0 16px;
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-surface);
-  }
-
-  /* Leaves room for the macOS close/minimise/zoom buttons. */
-  .toolbar--mac {
-    padding-left: 84px;
-  }
-
-  .app-title {
-    font-size: var(--font-size-title);
-    font-weight: 600;
-  }
-
-  .actions {
-    display: flex;
-    gap: 8px;
-  }
-</style>

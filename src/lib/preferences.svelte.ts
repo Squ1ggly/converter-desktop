@@ -1,5 +1,5 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
-import type { ResizeOption, VideoQuality } from "./backend";
+import type { ResizeOption, VideoQuality } from "$lib/backend";
 
 export type SaveLocation = { mode: "besideOriginal" } | { mode: "folder"; path: string };
 

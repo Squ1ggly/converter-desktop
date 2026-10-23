@@ -1,13 +1,16 @@
+import path from "node:path";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
-// Tauri sets TAURI_ENV_PLATFORM while building. Windows renders with
-// Chromium-based WebView2; macOS and Linux use WebKit.
+// Windows builds render in WebView2 (Chromium); macOS and Linux use WebKit.
 const isWindowsBuild = process.env.TAURI_ENV_PLATFORM === "windows";
 
 export default defineConfig({
-  plugins: [svelte()],
-  // Keep Rust compiler errors visible in the terminal during `tauri dev`.
+  plugins: [tailwindcss(), svelte()],
+  resolve: {
+    alias: { $lib: path.resolve(import.meta.dirname, "src/lib") },
+  },
   clearScreen: false,
   server: {
     // Must match build.devUrl in src-tauri/tauri.conf.json.

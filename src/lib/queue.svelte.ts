@@ -1,5 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import type { ConversionEvent, InspectedFile, MediaKind } from "./backend";
+import type { ConversionEvent, InspectedFile, MediaKind } from "$lib/backend";
 
 export type ItemStatus = "ready" | "waiting" | "converting" | "done" | "failed" | "cancelled";
 

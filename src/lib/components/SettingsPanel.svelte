@@ -1,7 +1,9 @@
 <script lang="ts">
-  import type { ConversionCatalog } from "../lib/backend";
-  import type { Preferences } from "../lib/preferences.svelte";
-  import ConvertBar from "./ConvertBar.svelte";
+  import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
+  import { Separator } from "$lib/components/ui/separator/index.js";
+  import type { ConversionCatalog } from "$lib/backend";
+  import type { Preferences } from "$lib/preferences.svelte";
+  import ConvertFooter from "./ConvertFooter.svelte";
   import ImageSettings from "./ImageSettings.svelte";
   import SaveLocation from "./SaveLocation.svelte";
   import VideoSettings from "./VideoSettings.svelte";
@@ -16,7 +18,7 @@
     isConverting: boolean;
     isCancelling: boolean;
     isRerun: boolean;
-    shortcutLabel: string;
+    platform: string;
     onConvert: () => void;
     onCancel: () => void;
   }
@@ -31,58 +33,33 @@
     isConverting,
     isCancelling,
     isRerun,
-    shortcutLabel,
+    platform,
     onConvert,
     onCancel,
   }: Props = $props();
 </script>
 
-<aside class="settings-panel" aria-label="Conversion settings">
-  <!-- Settings can't change mid-conversion; a disabled fieldset locks every
-       control inside it at once. -->
-  <fieldset class="settings-scroll" disabled={isConverting}>
-    {#if hasImages}
-      <ImageSettings formatOptions={catalog.imageOutputs} bind:preferences />
-    {/if}
-    {#if hasVideos}
-      <VideoSettings formatOptions={catalog.videoOutputs} bind:preferences />
-    {/if}
-    <section class="settings-section">
+<aside class="bg-muted/30 flex min-h-0 flex-col border-l" aria-label="Settings">
+  <ScrollArea class="min-h-0 flex-1">
+    <!-- A disabled fieldset locks every control while files convert. -->
+    <fieldset class="flex min-w-0 flex-col gap-6 p-5" disabled={isConverting}>
+      {#if hasImages}
+        <section class="flex flex-col gap-4" aria-labelledby="image-settings-heading">
+          <h2 id="image-settings-heading" class="text-sm font-semibold">Images</h2>
+          <ImageSettings formatOptions={catalog.imageOutputs} bind:preferences />
+        </section>
+        <Separator />
+      {/if}
+      {#if hasVideos}
+        <section class="flex flex-col gap-4" aria-labelledby="video-settings-heading">
+          <h2 id="video-settings-heading" class="text-sm font-semibold">Videos</h2>
+          <VideoSettings formatOptions={catalog.videoOutputs} bind:preferences />
+        </section>
+        <Separator />
+      {/if}
       <SaveLocation bind:saveLocation={preferences.saveLocation} />
-    </section>
-  </fieldset>
+    </fieldset>
+  </ScrollArea>
 
-  <ConvertBar {fileCount} {finishedCount} {isConverting} {isCancelling} {isRerun} {shortcutLabel} {onConvert} {onCancel} />
+  <ConvertFooter {fileCount} {finishedCount} {isConverting} {isCancelling} {isRerun} {platform} {onConvert} {onCancel} />
 </aside>
-
-<style>
-  .settings-panel {
-    display: grid;
-    grid-template-rows: 1fr auto;
-    min-height: 0;
-    border-left: 1px solid var(--color-border);
-    background: var(--color-surface);
-  }
-
-  .settings-scroll {
-    min-height: 0;
-    min-width: 0;
-    overflow-y: auto;
-    border: none;
-  }
-
-  .settings-scroll :global(.settings-section) {
-    display: grid;
-    gap: 18px;
-    padding: 20px;
-  }
-
-  .settings-scroll :global(.settings-section + .settings-section) {
-    border-top: 1px solid var(--color-border);
-  }
-
-  .settings-scroll :global(.section-title) {
-    font-size: var(--font-size-title);
-    font-weight: 600;
-  }
-</style>
