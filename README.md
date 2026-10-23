@@ -23,29 +23,32 @@ It started as the desktop version of a self-hosted web converter.
 
 ## Development
 
-You need [Rust](https://rustup.rs) 1.92+ and [Bun](https://bun.sh). On Linux you also need the
+You need [Rust](https://rustup.rs) 1.92+, [Node.js](https://nodejs.org) 24+ and
+[pnpm](https://pnpm.io). On Linux you also need the
 [Tauri system packages](https://tauri.app/start/prerequisites/#linux).
 
 ```bash
-bun install
-bun run fetch-ffmpeg     # downloads the pinned FFmpeg for this machine into src-tauri/binaries/
-bun run dev              # opens the app with hot reload
+pnpm install
+pnpm fetch-ffmpeg     # downloads the pinned FFmpeg for this machine into src-tauri/binaries/
+pnpm dev              # opens the app with hot reload
 ```
 
 | Command | What it does |
 |---|---|
-| `bun run dev` | Runs the app in development mode |
-| `bun run build` | Builds installers for this machine into `src-tauri/target/release/bundle/` |
-| `bun run check` | Type-checks the Svelte/TypeScript UI |
-| `bun run fetch-ffmpeg [--target <triple>]` | Downloads and checksum-verifies FFmpeg for a platform |
+| `pnpm dev` | Runs the app in development mode |
+| `pnpm build` | Builds installers for this machine into `src-tauri/target/release/bundle/` |
+| `pnpm check` | Type-checks the Svelte/TypeScript UI |
+| `pnpm fetch-ffmpeg [--target <triple>]` | Downloads and checksum-verifies FFmpeg for a platform |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | Unit tests, plus real conversions of every format through the bundled FFmpeg |
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for commit messages, checks and releases.
 
 ### Building for every platform
 
-Each platform has to be built on that platform. [.github/workflows/build.yml](.github/workflows/build.yml)
+Each platform has to be built on that platform. [.github/workflows/release.yml](.github/workflows/release.yml)
 builds all of them on GitHub Actions: macOS (Apple Silicon and Intel), Windows x64, and Linux
-(x64 and ARM). Run it manually to get the installers as artifacts, or push a `v*` tag to attach
-them to a draft release.
+(x64 and ARM). Merging the release PR attaches them to the new GitHub release. Run the workflow
+manually to get the installers as artifacts without releasing.
 
 Builds are unsigned. Before sharing them widely, set up
 [macOS signing and notarisation](https://v2.tauri.app/distribute/sign/macos/) and
