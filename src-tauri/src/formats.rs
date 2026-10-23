@@ -2,9 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-// Single source of truth for what the app accepts and produces. The frontend
-// renders its format pickers and file filters from `ConversionCatalog`, so a
-// format added here shows up in the UI without touching any TypeScript.
+// Every supported format. The UI is built from `ConversionCatalog`.
 
 const IMAGE_INPUT_EXTENSIONS: &[&str] = &[
     "avif", "bmp", "gif", "heic", "heif", "jpeg", "jpg", "pdf", "png", "svg", "tif", "tiff", "webp",
@@ -120,8 +118,7 @@ impl ImageFormat {
         )
     }
 
-    // HEIC is written with macOS's built-in `sips`; no other platform ships an
-    // encoder we can bundle.
+    // HEIC is written with macOS `sips`; there's no encoder to bundle elsewhere.
     fn is_available_on_this_platform(self) -> bool {
         let is_unsupported_heic = self == ImageFormat::Heic && !cfg!(target_os = "macos");
         !is_unsupported_heic

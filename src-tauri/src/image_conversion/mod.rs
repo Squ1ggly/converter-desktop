@@ -22,8 +22,7 @@ pub struct ImageConversion<'a> {
     pub cancellation: &'a CancellationToken,
 }
 
-// Read → resize → write. Every source is decoded into one in-memory image so
-// any input format can become any output format.
+// Decode → resize → encode, so any input can become any output.
 pub async fn convert_image(conversion: ImageConversion<'_>) -> ConversionResult<()> {
     let scratch_directory = tempfile::tempdir_in(conversion.scratch_root)?;
 
@@ -63,8 +62,7 @@ fn stop_if_cancelled(cancellation: &CancellationToken) -> ConversionResult<()> {
     Ok(())
 }
 
-// Image decoding, resizing and encoding are CPU-heavy; run them on Tokio's
-// blocking pool so they don't stall the async runtime the UI events use.
+// Keeps CPU-heavy image work off the async runtime.
 pub(crate) async fn run_blocking<T: Send + 'static>(
     work: impl FnOnce() -> ConversionResult<T> + Send + 'static,
 ) -> ConversionResult<T> {

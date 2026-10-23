@@ -63,8 +63,7 @@ pub fn run() {
         .expect("error while running the Converter app");
 }
 
-// Built here rather than in tauri.conf.json so the macOS-only title bar style
-// doesn't need a second, duplicated window definition per platform.
+// Built in code so the macOS title bar options don't need a second config.
 fn create_main_window(app: &App) -> tauri::Result<()> {
     let window_builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::default())
         .title("Converter")
@@ -100,8 +99,7 @@ fn create_app_state(app: &App) -> Result<AppState, Box<dyn std::error::Error>> {
     Ok(app_state)
 }
 
-// Intermediate files live in the current user's cache folder, not the
-// system-wide temp folder. Anything left by a crash is cleared on launch.
+// Per-user scratch folder, cleared on launch.
 fn prepare_scratch_root(app: &App) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let scratch_root = app.path().app_cache_dir()?.join("scratch");
 

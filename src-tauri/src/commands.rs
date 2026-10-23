@@ -24,10 +24,8 @@ pub fn get_catalog() -> ConversionCatalog {
     build_catalog()
 }
 
-// Turns dropped or picked paths into a file list. Folders are searched
-// recursively for convertible files (other files inside folders are skipped
-// silently); loose files are always returned so the UI can say which ones
-// it can't convert.
+// Folders are searched recursively and their unsupported files skipped.
+// Loose files are always returned so the UI can report unsupported ones.
 #[tauri::command]
 pub fn inspect_paths(app: AppHandle, paths: Vec<PathBuf>) -> Vec<InspectedFile> {
     let inspected_files: Vec<InspectedFile> = expand_folders(paths)
@@ -35,8 +33,7 @@ pub fn inspect_paths(app: AppHandle, paths: Vec<PathBuf>) -> Vec<InspectedFile> 
         .filter_map(|path| inspect_file(&path))
         .collect();
 
-    // Lets the webview load these files' previews through the asset protocol.
-    // Nothing is readable through it until it has been added here.
+    // Allows image previews through the asset protocol, one file at a time.
     let asset_scope = app.asset_protocol_scope();
     for file in inspected_files
         .iter()

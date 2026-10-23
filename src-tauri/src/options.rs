@@ -69,8 +69,7 @@ impl ConversionSettings {
         }
     }
 
-    // Images are CPU-bound and independent, so several can run at once. Each
-    // FFmpeg video encode already uses every core, so videos run one at a time.
+    // A video encode already uses every core, so videos run one at a time.
     pub fn max_parallel_files(&self) -> usize {
         match self {
             ConversionSettings::Image { .. } => parallel_image_limit(),

@@ -11,9 +11,8 @@ pub struct Dimensions {
     pub height: u32,
 }
 
-// The size an image of `width`×`height` should end up at. "Fit" scales up or
-// down so the image fills the box while keeping its proportions; a blank side
-// of the box doesn't constrain that side.
+// "Fit" scales up or down to fill the box, keeping proportions. A blank side
+// doesn't constrain.
 pub fn target_dimensions(width: u32, height: u32, resize: ResizeOption) -> Dimensions {
     let scale_factor = match resize {
         ResizeOption::Original => None,
@@ -89,8 +88,7 @@ pub fn shrink_to_fit(image: DynamicImage, max_length: u32) -> DynamicImage {
     shrunk_image
 }
 
-// Formats without transparency (JPG, BMP, PDF) would otherwise turn
-// transparent areas black. Composite onto white, as image editors do.
+// For formats without transparency, which would otherwise show black.
 pub fn flatten_onto_white(image: &DynamicImage) -> RgbImage {
     let rgba_image = image.to_rgba8();
     let (width, height) = rgba_image.dimensions();

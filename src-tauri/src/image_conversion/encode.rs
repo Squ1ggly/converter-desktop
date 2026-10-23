@@ -14,11 +14,9 @@ use crate::error::{ConversionError, ConversionResult};
 use crate::ffmpeg::Ffmpeg;
 use crate::formats::ImageFormat;
 
-// Tracing cost grows with pixel count and photos rarely trace well anyway;
-// larger images are shrunk to this before vectorising.
+// Larger images are shrunk before tracing; cost grows with pixel count.
 const MAX_SVG_TRACE_LENGTH: u32 = 2000;
-// AVIF's CRF runs 0 (lossless) to 63 (worst). Quality 100 maps to CRF 8 and
-// quality 1 to CRF 62, keeping the slider's useful range spread out.
+// Quality 1–100 maps to CRF 62–8 (AVIF's range is 0–63).
 const AVIF_BEST_CRF: f32 = 8.0;
 const AVIF_WORST_CRF: f32 = 62.0;
 const AVIF_ENCODER_SPEED: &str = "6";
@@ -91,8 +89,7 @@ fn write_jpeg(image: &DynamicImage, quality: u8, output_path: &Path) -> Conversi
     Ok(())
 }
 
-// One page per image, sized so 1 pixel = 1 point (72 DPI), matching what
-// image editors produce. The image is embedded as a JPEG at `quality`.
+// One page per image at 72 DPI, embedded as JPEG.
 fn write_pdf(image: &DynamicImage, quality: u8, output_path: &Path) -> ConversionResult<()> {
     let flattened_image = flatten_onto_white(image);
     let (width, height) = flattened_image.dimensions();
@@ -175,8 +172,7 @@ fn avif_arguments(quality: u8, has_transparency: bool) -> Vec<OsString> {
     let quality_fraction = (quality as f32 - 1.0) / 99.0;
     let crf = (AVIF_WORST_CRF - quality_fraction * (AVIF_WORST_CRF - AVIF_BEST_CRF)).round() as u32;
 
-    // AV1 can't carry alpha in the colour image, so AVIF stores it as a second
-    // greyscale image. This splits the alpha channel out into that stream.
+    // AVIF stores alpha as a second greyscale image.
     let mut arguments: Vec<OsString> = if has_transparency {
         vec![
             "-filter_complex".into(),
@@ -204,8 +200,7 @@ fn avif_arguments(quality: u8, has_transparency: bool) -> Vec<OsString> {
     arguments
 }
 
-// Hands a lossless PNG of the processed image to FFmpeg for the formats our
-// Rust image libraries can't encode well (lossy WebP, AVIF).
+// For formats the Rust image crates can't encode well (lossy WebP, AVIF).
 async fn write_with_ffmpeg(
     image: DynamicImage,
     encoder_arguments: Vec<OsString>,
@@ -230,8 +225,7 @@ async fn write_intermediate_png(
     Ok(intermediate_path)
 }
 
-// macOS ships a HEIC encoder in ImageIO; `sips` is its command-line front end
-// and is present on every Mac.
+// `sips` uses the HEIC encoder built into macOS.
 async fn write_heic(image: DynamicImage, quality: u8, job: &EncodeJob<'_>) -> ConversionResult<()> {
     let intermediate_path = write_intermediate_png(image, job.scratch_directory).await?;
 

@@ -17,8 +17,7 @@ use crate::ffmpeg::Ffmpeg;
 use crate::formats::lowercase_extension;
 use crate::options::ResizeOption;
 
-// PDF pages are measured in points (72 per inch); rendering at 150 DPI gives
-// readable text at the page's "original size".
+// "Original size" for a PDF page.
 const PDF_RENDER_DPI: f32 = 150.0;
 const PDF_POINTS_PER_INCH: f32 = 72.0;
 // hayro renders into a buffer addressed with 16-bit coordinates.
@@ -26,8 +25,7 @@ const MAX_RENDER_LENGTH: u32 = u16::MAX as u32;
 
 pub struct SourceImage {
     pub image: DynamicImage,
-    // Vector sources (SVG, PDF) are rendered straight at the requested size so
-    // they stay sharp; raster sources still need resizing afterwards.
+    // SVG and PDF render at the target size, so they skip the resize step.
     pub is_already_sized: bool,
 }
 
@@ -71,8 +69,7 @@ fn raster_source(image: DynamicImage) -> SourceImage {
     }
 }
 
-// Files are sometimes misnamed (an iPhone HEIC saved as .jpg, say), so if the
-// image crate can't read a file, give FFmpeg a try before reporting failure.
+// Falls back to FFmpeg for misnamed files, e.g. a HEIC saved as .jpg.
 async fn decode_raster(
     input_path: &Path,
     ffmpeg: &Ffmpeg,
@@ -159,8 +156,7 @@ fn render_svg(input_path: &Path, resize: ResizeOption) -> ConversionResult<Dynam
     Ok(rendered_image)
 }
 
-// Loading system fonts takes a while, so do it once and share it between
-// every SVG converted while the app is open.
+// Loading system fonts is slow, so it happens once.
 fn shared_font_database() -> Arc<usvg::fontdb::Database> {
     static FONT_DATABASE: OnceLock<Arc<usvg::fontdb::Database>> = OnceLock::new();
 

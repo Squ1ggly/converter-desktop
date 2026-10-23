@@ -4,14 +4,12 @@ use std::path::{Path, PathBuf};
 
 use crate::error::ConversionResult;
 
-// Gives up rather than looping forever if a folder is somehow full of copies.
+// Stops the search if a folder is somehow full of copies.
 const MAX_NAME_ATTEMPTS: u32 = 10_000;
 
-// Picks "<stem>.<extension>" in `directory`, or "<stem> (2).<extension>",
-// "<stem> (3).<extension>"… if that name is taken, and creates an empty file
-// there to claim it. Creating the file (instead of only checking it exists)
-// stops two conversions running in parallel — e.g. photo.png and photo.webp
-// both becoming photo.jpg — from picking the same name. Never overwrites.
+// Claims "<stem>.<ext>", or "<stem> (2).<ext>" and so on if taken, by creating
+// the file. Creating it (not just checking) stops parallel conversions picking
+// the same name. Never overwrites.
 pub fn reserve_output_path(
     input_path: &Path,
     directory: &Path,

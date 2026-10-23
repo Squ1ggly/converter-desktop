@@ -55,9 +55,7 @@ fn build_arguments(
     arguments
 }
 
-// Most encoders reject odd widths/heights with the yuv420p pixel format every
-// player supports, so dimensions are always rounded down to even numbers.
-// `max_height` only ever shrinks a video.
+// yuv420p needs even dimensions. `max_height` only ever shrinks.
 fn scale_filter(max_height: Option<u32>) -> String {
     let filter = match max_height {
         Some(max_height) => format!("scale=-2:'trunc(min(ih,{max_height})/2)*2'"),
@@ -75,8 +73,7 @@ fn frame_rate_arguments(frame_rate: Option<u32>) -> Vec<OsString> {
     arguments
 }
 
-// Builds a palette from the clip itself (instead of a generic 256 colours) so
-// the GIF looks far closer to the original.
+// A palette built from the clip looks far better than a generic one.
 fn gif_arguments(options: VideoOptions) -> Vec<OsString> {
     let frame_rate = options.frame_rate.unwrap_or(DEFAULT_GIF_FRAME_RATE);
     let height_limit = options.max_height.map_or("ih".to_string(), |max_height| {
@@ -97,8 +94,7 @@ fn codec_arguments(format: VideoFormat, quality: VideoQuality) -> Vec<OsString> 
         VideoFormat::Avi => avi_codec_flags(quality),
         VideoFormat::Mp4 | VideoFormat::M4v | VideoFormat::Mov => {
             let mut flags = h264_codec_flags(quality);
-            // Moves the index to the start so the file can play before it has
-            // fully downloaded or been read.
+            // Lets playback start before the whole file is read.
             flags.extend(["-movflags".to_string(), "+faststart".to_string()]);
             flags
         }

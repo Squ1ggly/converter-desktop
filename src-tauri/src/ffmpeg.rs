@@ -15,9 +15,7 @@ use crate::error::{ConversionError, ConversionResult};
 const STDERR_LINES_KEPT: usize = 40;
 const MAX_REPORTED_PERCENT: f32 = 99.0;
 
-// The bundled FFmpeg binary. Tauri copies `externalBin` sidecars next to the
-// app's own executable (in both `tauri dev` and installed builds), with the
-// target-triple suffix stripped.
+// The bundled FFmpeg. Tauri copies sidecars next to the app executable.
 #[derive(Clone, Debug)]
 pub struct Ffmpeg {
     binary_path: PathBuf,
@@ -40,8 +38,7 @@ impl Ffmpeg {
         Ok(ffmpeg)
     }
 
-    // Tests run from target/debug/deps, where no sidecar is copied, so they
-    // point straight at the binary `bun run fetch-ffmpeg` downloaded.
+    // Tests run from target/debug/deps, where no sidecar is copied.
     #[cfg(test)]
     pub fn from_downloaded_binary() -> Ffmpeg {
         let binaries_directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries");
@@ -60,9 +57,8 @@ impl Ffmpeg {
         Ffmpeg { binary_path }
     }
 
-    // Runs FFmpeg with `arguments` (everything after the global flags: inputs,
-    // codecs, output). Reports 0–99 percent while running when the input has a
-    // known duration. Cancelling kills the process.
+    // Reports 0–99% progress when the input has a known duration.
+    // Cancelling kills the process.
     pub async fn run(
         &self,
         arguments: Vec<OsString>,
@@ -140,8 +136,8 @@ async fn report_progress(
     }
 }
 
-// Drains stderr so FFmpeg never blocks on a full pipe, recording the input's
-// duration (for progress) and the last lines of output (for error messages).
+// Drains stderr so FFmpeg can't block on a full pipe. Keeps the duration (for
+// progress) and the last lines (for errors).
 async fn collect_stderr(
     stderr: ChildStderr,
     total_duration_microseconds: Arc<AtomicU64>,

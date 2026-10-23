@@ -74,9 +74,7 @@ struct FileJob {
     output_directory: Option<PathBuf>,
 }
 
-// Converts every file in the request, reporting each one's progress through
-// `context.events`. Returns once every file has completed, failed or been
-// cancelled.
+// Returns once every file has completed, failed or been cancelled.
 pub async fn run_batch(request: ConversionRequest, context: BatchContext) {
     let parallel_limit = Arc::new(Semaphore::new(request.settings.max_parallel_files()));
 
@@ -142,8 +140,7 @@ async fn convert_queued_file(job: FileJob, parallel_limit: Arc<Semaphore>, conte
     send_event(&context, finished_event);
 }
 
-// A failed or cancelled conversion removes its half-written output, so the
-// user is never left with a broken file.
+// Removes the partial output if the conversion fails or is cancelled.
 async fn convert_one_file(job: &FileJob, context: &BatchContext) -> ConversionResult<PathBuf> {
     let output_directory =
         resolve_output_directory(&job.file.path, job.output_directory.as_deref())?;

@@ -9,8 +9,7 @@ use crate::ffmpeg::Ffmpeg;
 pub struct AppState {
     // Err holds a message for the UI if the bundled FFmpeg couldn't be found.
     pub ffmpeg: Result<Ffmpeg, String>,
-    // Per-user scratch space for intermediate files, inside the app's cache
-    // folder. Emptied every launch.
+    // Per-user, cleared on launch.
     pub scratch_root: PathBuf,
     pub active_batches: ActiveBatches,
     pub produced_outputs: Arc<ProducedOutputs>,
@@ -40,17 +39,14 @@ impl ActiveBatches {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, CancellationToken>> {
-        // A panic while holding this lock can't leave the map inconsistent,
-        // so carry on with the data rather than failing every later call.
+        // A panic can't leave this map inconsistent, so ignore poisoning.
         self.cancellation_tokens
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
-// Files this app has written during the current session. "Open" and "Show in
-// folder" only act on these, so the webview can't be used to open arbitrary
-// paths on the user's machine.
+// Files written this session. Open and reveal only accept these paths.
 #[derive(Default)]
 pub struct ProducedOutputs {
     paths: Mutex<HashSet<PathBuf>>,
