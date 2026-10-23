@@ -2,6 +2,8 @@
 
 Converter turns images and videos into other formats on your own computer. Files are never uploaded.
 
+This guide is also in the app: click the question mark at the top right, or press F1.
+
 ## Using the app
 
 | Page | What it covers |
@@ -13,7 +15,7 @@ Converter turns images and videos into other formats on your own computer. Files
 | [Saving](saving.md) | Where converted files go and how they are named |
 | [Converting](converting.md) | Running a conversion, progress, cancelling and opening results |
 | [Keyboard shortcuts](shortcuts.md) | Shortcuts on each platform |
-| [Settings and data](settings-and-data.md) | What the app remembers and where it keeps its files |
+| [Settings and data](settings-and-data.md) | The Settings page, what the app remembers and where it keeps its files |
 | [Troubleshooting](troubleshooting.md) | Error messages and what to do about them |
 
 ## Development

@@ -1,8 +1,19 @@
 # Settings and data
 
+## Settings page
+
+Click the gear icon at the top right, or press ⌘, (Ctrl+, on Windows and Linux). The page has:
+
+- **Appearance**: System, Light or Dark.
+- **Images** and **Videos**: the same options as the side panel, so they can be set before adding
+  files.
+- **Save to**: where converted files go.
+
+Click **Back** to return. Settings can't be changed while files are converting.
+
 ## What is remembered
 
-Your last-used choices are saved as you change them and restored on the next launch:
+Your choices are saved as you change them and restored on the next launch:
 
 | Setting | Default |
 |---|---|
@@ -18,7 +29,7 @@ Your last-used choices are saved as you change them and restored on the next lau
 The file list is not remembered. If the saved image format is HEIC and the app is running on
 Windows or Linux, it falls back to JPG.
 
-The app follows your system's light or dark appearance.
+The theme is remembered separately and follows your system by default.
 
 ## Where files are kept
 

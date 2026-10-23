@@ -30,5 +30,6 @@ written to the [log](settings-and-data.md#where-files-are-kept).
 | The window shows "Couldn't start" | The app failed to load. The message and the log say why. |
 | The app is blocked on first launch | The builds are unsigned. See [Installing](installing.md). |
 
-If the app is closed or crashes during a conversion, the file being written can be left
-incomplete. Delete it and convert again.
+Closing the window during a conversion asks first, then cancels and removes unfinished files. If
+the app crashes mid-conversion, the file being written can be left incomplete. Delete it and
+convert again.
