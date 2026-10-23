@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -57,17 +58,33 @@ fn expand_folders(paths: Vec<PathBuf>) -> Vec<PathBuf> {
         }
     }
 
+    // Symlinks can make a folder contain itself; each real folder is read once.
+    let mut visited_folders = HashSet::new();
+
     while let Some(folder) = pending_folders.pop() {
-        for entry_path in list_visible_entries(&folder) {
-            if entry_path.is_dir() {
-                pending_folders.push(entry_path);
-            } else if classify_path(&entry_path).is_some() {
-                files.push(entry_path);
-            }
+        let real_folder = std::fs::canonicalize(&folder).unwrap_or(folder);
+        if !visited_folders.insert(real_folder.clone()) {
+            continue;
         }
+
+        let (subfolders, convertible_files) = split_folder_entries(&real_folder);
+        pending_folders.extend(subfolders);
+        files.extend(convertible_files);
     }
 
     files
+}
+
+fn split_folder_entries(folder: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    let (subfolders, other_entries): (Vec<PathBuf>, Vec<PathBuf>) = list_visible_entries(folder)
+        .into_iter()
+        .partition(|entry_path| entry_path.is_dir());
+    let convertible_files = other_entries
+        .into_iter()
+        .filter(|entry_path| classify_path(entry_path).is_some())
+        .collect();
+
+    (subfolders, convertible_files)
 }
 
 fn list_visible_entries(folder: &Path) -> Vec<PathBuf> {
@@ -161,4 +178,39 @@ fn ensure_produced_by_app(state: &AppState, path: &Path) -> Result<(), String> {
         return Ok(());
     }
     Err("Only files converted in this session can be opened from here".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_convertible_files_in_nested_folders() {
+        let root = tempfile::tempdir().unwrap();
+        let nested = root.path().join("trip").join("day one");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("beach.jpg"), b"").unwrap();
+        std::fs::write(nested.join("notes.txt"), b"").unwrap();
+        std::fs::write(root.path().join(".hidden.png"), b"").unwrap();
+
+        let files = expand_folders(vec![root.path().to_path_buf()]);
+
+        let names: Vec<String> = files
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["beach.jpg"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_loops_do_not_hang() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("photo.png"), b"").unwrap();
+        std::os::unix::fs::symlink(root.path(), root.path().join("loop")).unwrap();
+
+        let files = expand_folders(vec![root.path().to_path_buf()]);
+
+        assert_eq!(files.len(), 1);
+    }
 }
