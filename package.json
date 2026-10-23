@@ -1,0 +1,31 @@
+{
+  "name": "converter-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "ui:dev": "vite",
+    "ui:build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "fetch-ffmpeg": "bun scripts/fetch-ffmpeg.ts"
+  },
+  "dependencies": {
+    "@lucide/svelte": "^1.61.0",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.8.3",
+    "@tauri-apps/plugin-store": "^2.5.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tauri-apps/cli": "^2.12.4",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/bun": "^1.4.4",
+    "fflate": "^0.8.3",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.7",
+    "typescript": "~6",
+    "vite": "^8.3.5"
+  }
+}

@@ -1,0 +1,40 @@
+[package]
+name = "converter"
+version = "0.1.0"
+description = "Convert images and videos on your computer"
+authors = ["Squ1ggly"]
+license = "MIT"
+repository = ""
+edition = "2024"
+rust-version = "1.92"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "converter_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.12", features = ["protocol-asset"] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2.8"
+tauri-plugin-opener = "2.7"
+tokio-util = "0.7.20"
+thiserror = "2.0.21"
+tempfile = "3.27.0"
+resvg = "0.48.1"
+hayro = "0.8"
+vtracer = "0.6.5"
+pdf-writer = "0.15.0"
+tokio = { version = "1.54.1", features = ["process", "io-util", "sync", "macros", "rt"], default-features = false }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff"] }
+tauri-plugin-store = "2.5.0"
+
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "time", "macros"] }
