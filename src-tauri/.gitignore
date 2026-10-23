@@ -3,5 +3,5 @@
 /target/
 /gen/schemas
 
-# Downloaded by `bun run fetch-ffmpeg` (pinned + checksummed in scripts/fetch-ffmpeg.ts)
+# Downloaded by `pnpm fetch-ffmpeg` (pinned + checksummed in scripts/fetch-ffmpeg.ts)
 /binaries/

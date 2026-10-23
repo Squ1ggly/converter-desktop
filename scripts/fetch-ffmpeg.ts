@@ -1,11 +1,10 @@
-// Downloads the self-contained FFmpeg build for one target platform into
-// src-tauri/binaries/, where Tauri picks it up as a bundled sidecar.
+// Downloads FFmpeg for one platform into src-tauri/binaries/ for Tauri to bundle.
 //
-//   bun run fetch-ffmpeg                                # this machine's platform
-//   bun run fetch-ffmpeg --target x86_64-pc-windows-msvc
+//   pnpm fetch-ffmpeg
+//   pnpm fetch-ffmpeg --target x86_64-pc-windows-msvc
 //
-// Every download is pinned to an exact FFmpeg release and verified against a
-// SHA-256 checksum, so a build never ships an unexpected binary.
+// Downloads are pinned and checked against a SHA-256 checksum.
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -50,7 +49,7 @@ const DOWNLOADS: Record<string, FfmpegDownload> = {
   },
 };
 
-const BINARIES_DIRECTORY = path.join(import.meta.dir, "..", "src-tauri", "binaries");
+const BINARIES_DIRECTORY = path.join(import.meta.dirname, "..", "src-tauri", "binaries");
 
 function readTargetArgument(): string | undefined {
   const targetFlagIndex = process.argv.indexOf("--target");
@@ -62,9 +61,9 @@ function readTargetArgument(): string | undefined {
   return target;
 }
 
-// Rust's own idea of this machine's platform, e.g. "aarch64-apple-darwin".
-async function detectHostTarget(): Promise<string> {
-  const rustcOutput = await Bun.$`rustc -vV`.text();
+// The Rust target triple of this machine, e.g. "aarch64-apple-darwin".
+function detectHostTarget(): string {
+  const rustcOutput = execFileSync("rustc", ["-vV"], { encoding: "utf8" });
   const hostLine = rustcOutput.split("\n").find((line) => line.startsWith("host: "));
 
   if (!hostLine) {
@@ -105,7 +104,7 @@ function extractExecutable(archiveBytes: Uint8Array, entryPath: string): Uint8Ar
 }
 
 async function main(): Promise<void> {
-  const target = readTargetArgument() ?? (await detectHostTarget());
+  const target = readTargetArgument() ?? detectHostTarget();
   const download = DOWNLOADS[target];
 
   if (!download) {
@@ -113,7 +112,7 @@ async function main(): Promise<void> {
     throw new Error(`No FFmpeg build is configured for ${target}. Supported: ${supportedTargets}`);
   }
 
-  console.log(`Downloading FFmpeg ${FFMPEG_VERSION} for ${target}…`);
+  console.log(`Downloading FFmpeg ${FFMPEG_VERSION} for ${target}`);
   const archiveBytes = await downloadVerified(download);
   const executableBytes = extractExecutable(archiveBytes, download.entryPath);
 
