@@ -15,6 +15,10 @@ use crate::error::{ConversionError, ConversionResult};
 const STDERR_LINES_KEPT: usize = 40;
 const MAX_REPORTED_PERCENT: f32 = 99.0;
 
+// Matches externalBin in tauri.conf.json. Not plain "ffmpeg", so Linux packages
+// don't install a /usr/bin/ffmpeg that clashes with the distro's FFmpeg.
+const SIDECAR_NAME: &str = "converter-ffmpeg";
+
 // The bundled FFmpeg. Tauri copies sidecars next to the app executable.
 #[derive(Clone, Debug)]
 pub struct Ffmpeg {
@@ -27,7 +31,7 @@ impl Ffmpeg {
         let executable_directory = current_executable
             .parent()
             .unwrap_or(current_executable.as_path());
-        let binary_name = format!("ffmpeg{}", std::env::consts::EXE_SUFFIX);
+        let binary_name = format!("{SIDECAR_NAME}{}", std::env::consts::EXE_SUFFIX);
         let binary_path = executable_directory.join(binary_name);
 
         if !binary_path.is_file() {
@@ -53,8 +57,10 @@ impl Ffmpeg {
                 entries
                     .filter_map(|entry| entry.ok().map(|entry| entry.path()))
                     .find(|path| {
-                        path.file_name()
-                            .is_some_and(|name| name.to_string_lossy().starts_with("ffmpeg-"))
+                        path.file_name().is_some_and(|name| {
+                            name.to_string_lossy()
+                                .starts_with(&format!("{SIDECAR_NAME}-"))
+                        })
                     })
             })
             .expect("No FFmpeg in src-tauri/binaries. Run `pnpm fetch-ffmpeg` first.");

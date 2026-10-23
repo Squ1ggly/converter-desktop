@@ -44,7 +44,7 @@ For tests, see [Testing](../../CONTRIBUTING.md#testing).
 ## FFmpeg
 
 `pnpm fetch-ffmpeg` detects this machine's target from `rustc -vV`, downloads the pinned archive,
-checks its SHA-256, and saves the executable as `src-tauri/binaries/ffmpeg-<target triple>`.
+checks its SHA-256, and saves the executable as `src-tauri/binaries/converter-ffmpeg-<target triple>`.
 
 Supported targets:
 

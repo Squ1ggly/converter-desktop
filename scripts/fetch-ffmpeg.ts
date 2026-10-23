@@ -118,7 +118,7 @@ async function main(): Promise<void> {
 
   // Tauri expects sidecars named "<name>-<target triple>[.exe]".
   const executableSuffix = target.includes("windows") ? ".exe" : "";
-  const outputPath = path.join(BINARIES_DIRECTORY, `ffmpeg-${target}${executableSuffix}`);
+  const outputPath = path.join(BINARIES_DIRECTORY, `converter-ffmpeg-${target}${executableSuffix}`);
 
   await mkdir(BINARIES_DIRECTORY, { recursive: true });
   await writeFile(outputPath, executableBytes);

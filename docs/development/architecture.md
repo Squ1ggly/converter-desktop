@@ -72,7 +72,7 @@ scripts/fetch-ffmpeg.ts      Downloads the pinned, checksummed FFmpeg for a plat
 ## FFmpeg
 
 `scripts/fetch-ffmpeg.ts` downloads FFmpeg 9.0.2 for one target into
-`src-tauri/binaries/ffmpeg-<target triple>`. Each download is pinned to an exact URL and SHA-256.
+`src-tauri/binaries/converter-ffmpeg-<target triple>`. Each download is pinned to an exact URL and SHA-256.
 
 | Platform | Source |
 |---|---|

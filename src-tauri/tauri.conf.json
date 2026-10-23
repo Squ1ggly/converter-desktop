@@ -31,7 +31,7 @@
       "rpm"
     ],
     "externalBin": [
-      "binaries/ffmpeg"
+      "binaries/converter-ffmpeg"
     ],
     "category": "Utility",
     "shortDescription": "Convert images and videos",
