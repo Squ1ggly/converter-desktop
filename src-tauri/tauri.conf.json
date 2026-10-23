@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "bun run ui:dev",
-    "beforeBuildCommand": "bun run ui:build"
+    "beforeDevCommand": "pnpm ui:dev",
+    "beforeBuildCommand": "pnpm ui:build"
   },
   "app": {
     "windows": [],
@@ -22,8 +22,17 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg", "nsis", "msi", "deb", "rpm"],
-    "externalBin": ["binaries/ffmpeg"],
+    "targets": [
+      "app",
+      "dmg",
+      "nsis",
+      "msi",
+      "deb",
+      "rpm"
+    ],
+    "externalBin": [
+      "binaries/ffmpeg"
+    ],
     "category": "Utility",
     "shortDescription": "Convert images and videos",
     "longDescription": "Convert images and videos between formats on your own computer. Nothing is uploaded.",
