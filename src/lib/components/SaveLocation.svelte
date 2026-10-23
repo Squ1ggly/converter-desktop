@@ -40,7 +40,8 @@
 
 <Field.Set>
   <Field.Legend variant="label">Save to</Field.Legend>
-  <RadioGroup.Root value={selectedMode} onValueChange={selectMode}>
+  <!-- Bound through the saved choice, so the radio only moves once a folder is picked. -->
+  <RadioGroup.Root bind:value={() => selectedMode, (mode) => void selectMode(mode)}>
     <Field.Field orientation="horizontal">
       <RadioGroup.Item value="besideOriginal" id="save-beside-original" />
       <Field.Label for="save-beside-original" class="font-normal">Same folder as original</Field.Label>
