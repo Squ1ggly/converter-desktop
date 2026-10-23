@@ -38,10 +38,31 @@ pub async fn write_image(image: DynamicImage, job: &EncodeJob<'_>) -> Conversion
 
     match job.format {
         ImageFormat::Jpg => run_blocking(move || write_jpeg(&image, quality, &output_path)).await,
-        ImageFormat::Png => run_blocking(move || write_raster(&image, RasterFormat::Png, &output_path)).await,
-        ImageFormat::Gif => run_blocking(move || write_raster(&image.to_rgba8().into(), RasterFormat::Gif, &output_path)).await,
-        ImageFormat::Tiff => run_blocking(move || write_raster(&image.to_rgba8().into(), RasterFormat::Tiff, &output_path)).await,
-        ImageFormat::Bmp => run_blocking(move || write_raster(&flatten_onto_white(&image).into(), RasterFormat::Bmp, &output_path)).await,
+        ImageFormat::Png => {
+            run_blocking(move || write_raster(&image, RasterFormat::Png, &output_path)).await
+        }
+        ImageFormat::Gif => {
+            run_blocking(move || {
+                write_raster(&image.to_rgba8().into(), RasterFormat::Gif, &output_path)
+            })
+            .await
+        }
+        ImageFormat::Tiff => {
+            run_blocking(move || {
+                write_raster(&image.to_rgba8().into(), RasterFormat::Tiff, &output_path)
+            })
+            .await
+        }
+        ImageFormat::Bmp => {
+            run_blocking(move || {
+                write_raster(
+                    &flatten_onto_white(&image).into(),
+                    RasterFormat::Bmp,
+                    &output_path,
+                )
+            })
+            .await
+        }
         ImageFormat::Pdf => run_blocking(move || write_pdf(&image, quality, &output_path)).await,
         ImageFormat::Svg => run_blocking(move || write_svg(image, &output_path)).await,
         ImageFormat::Webp => write_with_ffmpeg(image, webp_arguments(quality), job).await,
@@ -53,7 +74,11 @@ pub async fn write_image(image: DynamicImage, job: &EncodeJob<'_>) -> Conversion
     }
 }
 
-fn write_raster(image: &DynamicImage, format: RasterFormat, output_path: &Path) -> ConversionResult<()> {
+fn write_raster(
+    image: &DynamicImage,
+    format: RasterFormat,
+    output_path: &Path,
+) -> ConversionResult<()> {
     let mut writer = BufWriter::new(File::create(output_path)?);
     image.write_to(&mut writer, format)?;
     Ok(())
@@ -129,14 +154,20 @@ fn write_svg(image: DynamicImage, output_path: &Path) -> ConversionResult<()> {
         width: width as usize,
         height: height as usize,
     };
-    let svg = vtracer::convert(color_image, vtracer::Config::default()).map_err(ConversionError::Svg)?;
+    let svg =
+        vtracer::convert(color_image, vtracer::Config::default()).map_err(ConversionError::Svg)?;
 
     std::fs::write(output_path, svg.to_string())?;
     Ok(())
 }
 
 fn webp_arguments(quality: u8) -> Vec<OsString> {
-    let arguments = vec!["-c:v".into(), "libwebp".into(), "-quality".into(), quality.to_string().into()];
+    let arguments = vec![
+        "-c:v".into(),
+        "libwebp".into(),
+        "-quality".into(),
+        quality.to_string().into(),
+    ];
     arguments
 }
 
@@ -149,7 +180,8 @@ fn avif_arguments(quality: u8, has_transparency: bool) -> Vec<OsString> {
     let mut arguments: Vec<OsString> = if has_transparency {
         vec![
             "-filter_complex".into(),
-            "[0:v]format=yuva444p,split[color][alpha_source];[alpha_source]alphaextract[alpha]".into(),
+            "[0:v]format=yuva444p,split[color][alpha_source];[alpha_source]alphaextract[alpha]"
+                .into(),
             "-map".into(),
             "[color]".into(),
             "-map".into(),
@@ -174,7 +206,11 @@ fn avif_arguments(quality: u8, has_transparency: bool) -> Vec<OsString> {
 
 // Hands a lossless PNG of the processed image to FFmpeg for the formats our
 // Rust image libraries can't encode well (lossy WebP, AVIF).
-async fn write_with_ffmpeg(image: DynamicImage, encoder_arguments: Vec<OsString>, job: &EncodeJob<'_>) -> ConversionResult<()> {
+async fn write_with_ffmpeg(
+    image: DynamicImage,
+    encoder_arguments: Vec<OsString>,
+    job: &EncodeJob<'_>,
+) -> ConversionResult<()> {
     let intermediate_path = write_intermediate_png(image, job.scratch_directory).await?;
 
     let mut arguments: Vec<OsString> = vec!["-i".into(), intermediate_path.into()];
@@ -184,7 +220,10 @@ async fn write_with_ffmpeg(image: DynamicImage, encoder_arguments: Vec<OsString>
     job.ffmpeg.run(arguments, job.cancellation, |_| {}).await
 }
 
-async fn write_intermediate_png(image: DynamicImage, scratch_directory: &Path) -> ConversionResult<PathBuf> {
+async fn write_intermediate_png(
+    image: DynamicImage,
+    scratch_directory: &Path,
+) -> ConversionResult<PathBuf> {
     let intermediate_path = scratch_directory.join("intermediate.png");
     let path_for_writer = intermediate_path.clone();
     run_blocking(move || write_raster(&image, RasterFormat::Png, &path_for_writer)).await?;
@@ -198,7 +237,14 @@ async fn write_heic(image: DynamicImage, quality: u8, job: &EncodeJob<'_>) -> Co
 
     let mut command = tokio::process::Command::new("/usr/bin/sips");
     command
-        .args(["-s", "format", "heic", "-s", "formatOptions", &quality.to_string()])
+        .args([
+            "-s",
+            "format",
+            "heic",
+            "-s",
+            "formatOptions",
+            &quality.to_string(),
+        ])
         .arg(&intermediate_path)
         .arg("--out")
         .arg(job.output_path)
@@ -222,7 +268,10 @@ mod tests {
     use super::*;
 
     fn crf_argument(arguments: &[OsString]) -> String {
-        let crf_flag_index = arguments.iter().position(|argument| argument == "-crf").expect("has -crf");
+        let crf_flag_index = arguments
+            .iter()
+            .position(|argument| argument == "-crf")
+            .expect("has -crf");
         arguments[crf_flag_index + 1].to_string_lossy().into_owned()
     }
 
@@ -242,6 +291,10 @@ mod tests {
     fn pdf_output_is_a_well_formed_document() {
         let pdf_bytes = build_single_image_pdf(b"not-really-a-jpeg", 40, 20);
         assert!(pdf_bytes.starts_with(b"%PDF-"));
-        assert!(pdf_bytes.windows(b"/MediaBox [0 0 40 20]".len()).any(|window| window == b"/MediaBox [0 0 40 20]"));
+        assert!(
+            pdf_bytes
+                .windows(b"/MediaBox [0 0 40 20]".len())
+                .any(|window| window == b"/MediaBox [0 0 40 20]")
+        );
     }
 }

@@ -32,13 +32,30 @@ pub struct ConversionRequest {
 }
 
 #[derive(Clone, Debug, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ConversionEvent {
-    Started { file_id: String },
-    Progress { file_id: String, percent: f32 },
-    Completed { file_id: String, output_path: PathBuf },
-    Failed { file_id: String, message: String },
-    Cancelled { file_id: String },
+    Started {
+        file_id: String,
+    },
+    Progress {
+        file_id: String,
+        percent: f32,
+    },
+    Completed {
+        file_id: String,
+        output_path: PathBuf,
+    },
+    Failed {
+        file_id: String,
+        message: String,
+    },
+    Cancelled {
+        file_id: String,
+    },
 }
 
 #[derive(Clone)]
@@ -72,7 +89,11 @@ pub async fn run_batch(request: ConversionRequest, context: BatchContext) {
                 settings: request.settings,
                 output_directory: request.output_directory.clone(),
             };
-            tauri::async_runtime::spawn(convert_queued_file(job, parallel_limit.clone(), context.clone()))
+            tauri::async_runtime::spawn(convert_queued_file(
+                job,
+                parallel_limit.clone(),
+                context.clone(),
+            ))
         })
         .collect();
 
@@ -93,18 +114,29 @@ async fn convert_queued_file(job: FileJob, parallel_limit: Arc<Semaphore>, conte
         return;
     };
 
-    send_event(&context, ConversionEvent::Started { file_id: file_id.clone() });
+    send_event(
+        &context,
+        ConversionEvent::Started {
+            file_id: file_id.clone(),
+        },
+    );
     let conversion_result = convert_one_file(&job, &context).await;
 
     let finished_event = match conversion_result {
         Ok(output_path) => {
             context.produced_outputs.remember(&output_path);
-            ConversionEvent::Completed { file_id, output_path }
+            ConversionEvent::Completed {
+                file_id,
+                output_path,
+            }
         }
         Err(ConversionError::Cancelled) => ConversionEvent::Cancelled { file_id },
         Err(error) => {
             log::warn!("conversion failed for {}: {error}", job.file.path.display());
-            ConversionEvent::Failed { file_id, message: error.to_string() }
+            ConversionEvent::Failed {
+                file_id,
+                message: error.to_string(),
+            }
         }
     };
     send_event(&context, finished_event);
@@ -113,8 +145,13 @@ async fn convert_queued_file(job: FileJob, parallel_limit: Arc<Semaphore>, conte
 // A failed or cancelled conversion removes its half-written output, so the
 // user is never left with a broken file.
 async fn convert_one_file(job: &FileJob, context: &BatchContext) -> ConversionResult<PathBuf> {
-    let output_directory = resolve_output_directory(&job.file.path, job.output_directory.as_deref())?;
-    let output_path = reserve_output_path(&job.file.path, &output_directory, job.settings.output_extension())?;
+    let output_directory =
+        resolve_output_directory(&job.file.path, job.output_directory.as_deref())?;
+    let output_path = reserve_output_path(
+        &job.file.path,
+        &output_directory,
+        job.settings.output_extension(),
+    )?;
 
     let conversion_result = run_conversion(job, &output_path, context).await;
     if conversion_result.is_err() {
@@ -124,19 +161,28 @@ async fn convert_one_file(job: &FileJob, context: &BatchContext) -> ConversionRe
     conversion_result.map(|_| output_path)
 }
 
-fn resolve_output_directory(input_path: &Path, chosen_directory: Option<&Path>) -> ConversionResult<PathBuf> {
+fn resolve_output_directory(
+    input_path: &Path,
+    chosen_directory: Option<&Path>,
+) -> ConversionResult<PathBuf> {
     if let Some(chosen_directory) = chosen_directory {
         return Ok(chosen_directory.to_path_buf());
     }
 
-    let source_directory = input_path
-        .parent()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "The file's folder could not be found"))?;
+    let source_directory = input_path.parent().map(Path::to_path_buf).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "The file's folder could not be found",
+        )
+    })?;
     Ok(source_directory)
 }
 
-async fn run_conversion(job: &FileJob, output_path: &Path, context: &BatchContext) -> ConversionResult<()> {
+async fn run_conversion(
+    job: &FileJob,
+    output_path: &Path,
+    context: &BatchContext,
+) -> ConversionResult<()> {
     match job.settings {
         ConversionSettings::Image { format, options } => {
             let conversion = ImageConversion {

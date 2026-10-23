@@ -12,7 +12,11 @@ const MAX_NAME_ATTEMPTS: u32 = 10_000;
 // there to claim it. Creating the file (instead of only checking it exists)
 // stops two conversions running in parallel — e.g. photo.png and photo.webp
 // both becoming photo.jpg — from picking the same name. Never overwrites.
-pub fn reserve_output_path(input_path: &Path, directory: &Path, extension: &str) -> ConversionResult<PathBuf> {
+pub fn reserve_output_path(
+    input_path: &Path,
+    directory: &Path,
+    extension: &str,
+) -> ConversionResult<PathBuf> {
     let stem = input_path
         .file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
@@ -20,7 +24,10 @@ pub fn reserve_output_path(input_path: &Path, directory: &Path, extension: &str)
 
     for attempt in 1..=MAX_NAME_ATTEMPTS {
         let candidate_path = directory.join(candidate_file_name(&stem, extension, attempt));
-        let creation_result = OpenOptions::new().write(true).create_new(true).open(&candidate_path);
+        let creation_result = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate_path);
 
         match creation_result {
             Ok(_) => return Ok(candidate_path),
@@ -29,7 +36,10 @@ pub fn reserve_output_path(input_path: &Path, directory: &Path, extension: &str)
         }
     }
 
-    let exhausted_error = std::io::Error::new(ErrorKind::AlreadyExists, "Too many files with this name already exist");
+    let exhausted_error = std::io::Error::new(
+        ErrorKind::AlreadyExists,
+        "Too many files with this name already exist",
+    );
     Err(exhausted_error.into())
 }
 
@@ -52,7 +62,8 @@ mod tests {
         let input_path = directory.path().join("holiday.png");
 
         let first = reserve_output_path(&input_path, directory.path(), "jpg").expect("first name");
-        let second = reserve_output_path(&input_path, directory.path(), "jpg").expect("second name");
+        let second =
+            reserve_output_path(&input_path, directory.path(), "jpg").expect("second name");
 
         assert_eq!(first.file_name().unwrap(), "holiday.jpg");
         assert_eq!(second.file_name().unwrap(), "holiday (2).jpg");
@@ -64,7 +75,8 @@ mod tests {
         let input_path = directory.path().join("clip.mp4");
         std::fs::write(&input_path, b"original").expect("write input");
 
-        let output_path = reserve_output_path(&input_path, directory.path(), "mp4").expect("output name");
+        let output_path =
+            reserve_output_path(&input_path, directory.path(), "mp4").expect("output name");
 
         assert_eq!(output_path.file_name().unwrap(), "clip (2).mp4");
         assert_eq!(std::fs::read(&input_path).unwrap(), b"original");

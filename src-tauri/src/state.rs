@@ -24,7 +24,8 @@ pub struct ActiveBatches {
 impl ActiveBatches {
     pub fn start(&self, batch_id: &str) -> CancellationToken {
         let cancellation = CancellationToken::new();
-        self.lock().insert(batch_id.to_string(), cancellation.clone());
+        self.lock()
+            .insert(batch_id.to_string(), cancellation.clone());
         cancellation
     }
 
@@ -41,7 +42,9 @@ impl ActiveBatches {
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, CancellationToken>> {
         // A panic while holding this lock can't leave the map inconsistent,
         // so carry on with the data rather than failing every later call.
-        self.cancellation_tokens.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.cancellation_tokens
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -63,6 +66,8 @@ impl ProducedOutputs {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, HashSet<PathBuf>> {
-        self.paths.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.paths
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }

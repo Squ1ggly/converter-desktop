@@ -19,12 +19,28 @@ pub struct VideoConversion<'a> {
     pub cancellation: &'a CancellationToken,
 }
 
-pub async fn convert_video(conversion: VideoConversion<'_>, on_progress: impl FnMut(f32)) -> ConversionResult<()> {
-    let arguments = build_arguments(conversion.input_path, conversion.output_path, conversion.format, conversion.options);
-    conversion.ffmpeg.run(arguments, conversion.cancellation, on_progress).await
+pub async fn convert_video(
+    conversion: VideoConversion<'_>,
+    on_progress: impl FnMut(f32),
+) -> ConversionResult<()> {
+    let arguments = build_arguments(
+        conversion.input_path,
+        conversion.output_path,
+        conversion.format,
+        conversion.options,
+    );
+    conversion
+        .ffmpeg
+        .run(arguments, conversion.cancellation, on_progress)
+        .await
 }
 
-fn build_arguments(input_path: &Path, output_path: &Path, format: VideoFormat, options: VideoOptions) -> Vec<OsString> {
+fn build_arguments(
+    input_path: &Path,
+    output_path: &Path,
+    format: VideoFormat,
+    options: VideoOptions,
+) -> Vec<OsString> {
     let mut arguments: Vec<OsString> = vec!["-i".into(), input_path.into()];
 
     if format == VideoFormat::Gif {
@@ -63,7 +79,9 @@ fn frame_rate_arguments(frame_rate: Option<u32>) -> Vec<OsString> {
 // the GIF looks far closer to the original.
 fn gif_arguments(options: VideoOptions) -> Vec<OsString> {
     let frame_rate = options.frame_rate.unwrap_or(DEFAULT_GIF_FRAME_RATE);
-    let height_limit = options.max_height.map_or("ih".to_string(), |max_height| format!("min(ih,{max_height})"));
+    let height_limit = options.max_height.map_or("ih".to_string(), |max_height| {
+        format!("min(ih,{max_height})")
+    });
     let filter = format!(
         "fps={frame_rate},scale=-2:'{height_limit}':flags=lanczos,split[frames][palette_source];\
          [palette_source]palettegen[palette];[frames][palette]paletteuse"
@@ -99,7 +117,18 @@ fn h264_codec_flags(quality: VideoQuality) -> Vec<String> {
     };
 
     let flags = [
-        "-c:v", "libx264", "-preset", "medium", "-crf", crf, "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", audio_bitrate,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        crf,
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        audio_bitrate,
     ];
     flags.map(String::from).to_vec()
 }
@@ -113,7 +142,19 @@ fn webm_codec_flags(quality: VideoQuality) -> Vec<String> {
 
     // "-b:v 0" switches VP9 into constant-quality mode so the CRF is honoured.
     let flags = [
-        "-c:v", "libvpx-vp9", "-crf", crf, "-b:v", "0", "-row-mt", "1", "-pix_fmt", "yuv420p", "-c:a", "libopus", "-b:a",
+        "-c:v",
+        "libvpx-vp9",
+        "-crf",
+        crf,
+        "-b:v",
+        "0",
+        "-row-mt",
+        "1",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "libopus",
+        "-b:a",
         audio_bitrate,
     ];
     flags.map(String::from).to_vec()
@@ -126,7 +167,16 @@ fn avi_codec_flags(quality: VideoQuality) -> Vec<String> {
         VideoQuality::Small => ("7", "128k"),
     };
 
-    let flags = ["-c:v", "mpeg4", "-q:v", quantizer, "-c:a", "libmp3lame", "-b:a", audio_bitrate];
+    let flags = [
+        "-c:v",
+        "mpeg4",
+        "-q:v",
+        quantizer,
+        "-c:a",
+        "libmp3lame",
+        "-b:a",
+        audio_bitrate,
+    ];
     flags.map(String::from).to_vec()
 }
 
@@ -141,7 +191,11 @@ mod tests {
             .collect()
     }
 
-    const BALANCED: VideoOptions = VideoOptions { quality: VideoQuality::Balanced, max_height: None, frame_rate: None };
+    const BALANCED: VideoOptions = VideoOptions {
+        quality: VideoQuality::Balanced,
+        max_height: None,
+        frame_rate: None,
+    };
 
     #[test]
     fn mp4_uses_h264_with_fast_start() {
@@ -153,7 +207,10 @@ mod tests {
 
     #[test]
     fn resolution_limit_only_shrinks() {
-        let options = VideoOptions { max_height: Some(720), ..BALANCED };
+        let options = VideoOptions {
+            max_height: Some(720),
+            ..BALANCED
+        };
         let arguments = arguments_as_text(VideoFormat::Mkv, options);
         assert!(arguments.contains(&"scale=-2:'trunc(min(ih,720)/2)*2'".to_string()));
     }
@@ -162,6 +219,10 @@ mod tests {
     fn gif_drops_audio_and_builds_a_palette() {
         let arguments = arguments_as_text(VideoFormat::Gif, BALANCED);
         assert!(arguments.contains(&"-an".to_string()));
-        assert!(arguments.iter().any(|argument| argument.contains("palettegen")));
+        assert!(
+            arguments
+                .iter()
+                .any(|argument| argument.contains("palettegen"))
+        );
     }
 }

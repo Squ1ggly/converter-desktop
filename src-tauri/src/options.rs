@@ -3,11 +3,20 @@ use serde::Deserialize;
 use crate::formats::{ImageFormat, VideoFormat};
 
 #[derive(Clone, Copy, Debug, Deserialize)]
-#[serde(tag = "mode", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "mode",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ResizeOption {
     Original,
-    Percent { percent: u32 },
-    Fit { max_width: Option<u32>, max_height: Option<u32> },
+    Percent {
+        percent: u32,
+    },
+    Fit {
+        max_width: Option<u32>,
+        max_height: Option<u32>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -36,10 +45,20 @@ pub struct VideoOptions {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ConversionSettings {
-    Image { format: ImageFormat, options: ImageOptions },
-    Video { format: VideoFormat, options: VideoOptions },
+    Image {
+        format: ImageFormat,
+        options: ImageOptions,
+    },
+    Video {
+        format: VideoFormat,
+        options: VideoOptions,
+    },
 }
 
 impl ConversionSettings {
@@ -87,7 +106,10 @@ mod tests {
         assert_eq!(format, ImageFormat::Webp);
         assert!(matches!(
             options.resize,
-            ResizeOption::Fit { max_width: Some(1200), max_height: None }
+            ResizeOption::Fit {
+                max_width: Some(1200),
+                max_height: None
+            }
         ));
     }
 }

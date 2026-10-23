@@ -38,7 +38,10 @@ pub fn inspect_paths(app: AppHandle, paths: Vec<PathBuf>) -> Vec<InspectedFile> 
     // Lets the webview load these files' previews through the asset protocol.
     // Nothing is readable through it until it has been added here.
     let asset_scope = app.asset_protocol_scope();
-    for file in inspected_files.iter().filter(|file| file.kind == Some(MediaKind::Image)) {
+    for file in inspected_files
+        .iter()
+        .filter(|file| file.kind == Some(MediaKind::Image))
+    {
         let _ = asset_scope.allow_file(&file.path);
     }
 
@@ -132,16 +135,28 @@ pub fn cancel_conversion(state: State<'_, AppState>, batch_id: String) {
 }
 
 #[tauri::command]
-pub fn reveal_output(app: AppHandle, state: State<'_, AppState>, path: PathBuf) -> Result<(), String> {
+pub fn reveal_output(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: PathBuf,
+) -> Result<(), String> {
     ensure_produced_by_app(&state, &path)?;
-    app.opener().reveal_item_in_dir(&path).map_err(|error| error.to_string())
+    app.opener()
+        .reveal_item_in_dir(&path)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-pub fn open_output(app: AppHandle, state: State<'_, AppState>, path: PathBuf) -> Result<(), String> {
+pub fn open_output(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: PathBuf,
+) -> Result<(), String> {
     ensure_produced_by_app(&state, &path)?;
     let path_text = path.to_string_lossy().into_owned();
-    app.opener().open_path(path_text, None::<&str>).map_err(|error| error.to_string())
+    app.opener()
+        .open_path(path_text, None::<&str>)
+        .map_err(|error| error.to_string())
 }
 
 fn ensure_produced_by_app(state: &AppState, path: &Path) -> Result<(), String> {

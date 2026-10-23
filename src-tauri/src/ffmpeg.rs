@@ -26,7 +26,9 @@ pub struct Ffmpeg {
 impl Ffmpeg {
     pub fn locate() -> ConversionResult<Ffmpeg> {
         let current_executable = std::env::current_exe()?;
-        let executable_directory = current_executable.parent().unwrap_or(current_executable.as_path());
+        let executable_directory = current_executable
+            .parent()
+            .unwrap_or(current_executable.as_path());
         let binary_name = format!("ffmpeg{}", std::env::consts::EXE_SUFFIX);
         let binary_path = executable_directory.join(binary_name);
 
@@ -48,7 +50,10 @@ impl Ffmpeg {
             .and_then(|entries| {
                 entries
                     .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-                    .find(|path| path.file_name().is_some_and(|name| name.to_string_lossy().starts_with("ffmpeg-")))
+                    .find(|path| {
+                        path.file_name()
+                            .is_some_and(|name| name.to_string_lossy().starts_with("ffmpeg-"))
+                    })
             })
             .expect("No FFmpeg in src-tauri/binaries. Run `bun run fetch-ffmpeg` first.");
 
@@ -66,7 +71,14 @@ impl Ffmpeg {
     ) -> ConversionResult<()> {
         let mut command = Command::new(&self.binary_path);
         command
-            .args(["-hide_banner", "-nostdin", "-y", "-nostats", "-progress", "pipe:1"])
+            .args([
+                "-hide_banner",
+                "-nostdin",
+                "-y",
+                "-nostats",
+                "-progress",
+                "pipe:1",
+            ])
             .args(arguments)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -130,7 +142,10 @@ async fn report_progress(
 
 // Drains stderr so FFmpeg never blocks on a full pipe, recording the input's
 // duration (for progress) and the last lines of output (for error messages).
-async fn collect_stderr(stderr: ChildStderr, total_duration_microseconds: Arc<AtomicU64>) -> Vec<String> {
+async fn collect_stderr(
+    stderr: ChildStderr,
+    total_duration_microseconds: Arc<AtomicU64>,
+) -> Vec<String> {
     let mut recent_lines = VecDeque::with_capacity(STDERR_LINES_KEPT);
     let mut lines = BufReader::new(stderr).lines();
 
@@ -193,14 +208,23 @@ fn parse_progress_percent(line: &str, total_microseconds: u64) -> Option<f32> {
 
 fn extract_error_message(stderr_lines: &[String]) -> String {
     let explicit_error_line = stderr_lines.iter().rev().find(|line| {
-        line.contains("Error") || line.contains("Invalid") || line.contains("No such") || line.contains("not supported")
+        line.contains("Error")
+            || line.contains("Invalid")
+            || line.contains("No such")
+            || line.contains("not supported")
     });
 
     if let Some(error_line) = explicit_error_line {
         return error_line.trim().to_string();
     }
 
-    let last_lines: Vec<&str> = stderr_lines.iter().rev().take(2).rev().map(|line| line.trim()).collect();
+    let last_lines: Vec<&str> = stderr_lines
+        .iter()
+        .rev()
+        .take(2)
+        .rev()
+        .map(|line| line.trim())
+        .collect();
     let fallback_message = if last_lines.is_empty() {
         "FFmpeg could not convert this file".to_string()
     } else {
@@ -217,14 +241,26 @@ mod tests {
     fn parses_input_duration() {
         let line = "  Duration: 00:01:30.50, start: 0.000000, bitrate: 1205 kb/s";
         assert_eq!(parse_duration_microseconds(line), Some(90_500_000));
-        assert_eq!(parse_duration_microseconds("  Duration: N/A, bitrate: N/A"), None);
-        assert_eq!(parse_duration_microseconds("Stream #0:0: Video: h264"), None);
+        assert_eq!(
+            parse_duration_microseconds("  Duration: N/A, bitrate: N/A"),
+            None
+        );
+        assert_eq!(
+            parse_duration_microseconds("Stream #0:0: Video: h264"),
+            None
+        );
     }
 
     #[test]
     fn progress_is_capped_below_one_hundred_until_ffmpeg_exits() {
-        assert_eq!(parse_progress_percent("out_time_us=5000000", 10_000_000), Some(50.0));
-        assert_eq!(parse_progress_percent("out_time_us=20000000", 10_000_000), Some(MAX_REPORTED_PERCENT));
+        assert_eq!(
+            parse_progress_percent("out_time_us=5000000", 10_000_000),
+            Some(50.0)
+        );
+        assert_eq!(
+            parse_progress_percent("out_time_us=20000000", 10_000_000),
+            Some(MAX_REPORTED_PERCENT)
+        );
         assert_eq!(parse_progress_percent("out_time_us=5000000", 0), None);
         assert_eq!(parse_progress_percent("frame=12", 10_000_000), None);
     }
@@ -236,6 +272,9 @@ mod tests {
             "Error opening input file broken.mov.".to_string(),
             "Exiting".to_string(),
         ];
-        assert_eq!(extract_error_message(&lines), "Error opening input file broken.mov.");
+        assert_eq!(
+            extract_error_message(&lines),
+            "Error opening input file broken.mov."
+        );
     }
 }

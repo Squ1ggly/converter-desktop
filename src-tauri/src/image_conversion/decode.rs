@@ -43,20 +43,32 @@ pub async fn load_source_image(
 
     let source_image = match extension.as_str() {
         "svg" => vector_source(run_blocking(move || render_svg(&owned_input_path, resize)).await?),
-        "pdf" => vector_source(run_blocking(move || render_pdf_first_page(&owned_input_path, resize)).await?),
+        "pdf" => vector_source(
+            run_blocking(move || render_pdf_first_page(&owned_input_path, resize)).await?,
+        ),
         // The image crate can't decode these; the bundled FFmpeg can.
-        "heic" | "heif" | "avif" => raster_source(decode_with_ffmpeg(input_path, ffmpeg, scratch_directory, cancellation).await?),
-        _ => raster_source(decode_raster(input_path, ffmpeg, scratch_directory, cancellation).await?),
+        "heic" | "heif" | "avif" => raster_source(
+            decode_with_ffmpeg(input_path, ffmpeg, scratch_directory, cancellation).await?,
+        ),
+        _ => {
+            raster_source(decode_raster(input_path, ffmpeg, scratch_directory, cancellation).await?)
+        }
     };
     Ok(source_image)
 }
 
 fn vector_source(image: DynamicImage) -> SourceImage {
-    SourceImage { image, is_already_sized: true }
+    SourceImage {
+        image,
+        is_already_sized: true,
+    }
 }
 
 fn raster_source(image: DynamicImage) -> SourceImage {
-    SourceImage { image, is_already_sized: false }
+    SourceImage {
+        image,
+        is_already_sized: false,
+    }
 }
 
 // Files are sometimes misnamed (an iPhone HEIC saved as .jpg, say), so if the
@@ -74,7 +86,8 @@ async fn decode_raster(
         return image_crate_result;
     };
 
-    let ffmpeg_result = decode_with_ffmpeg(input_path, ffmpeg, scratch_directory, cancellation).await;
+    let ffmpeg_result =
+        decode_with_ffmpeg(input_path, ffmpeg, scratch_directory, cancellation).await;
     ffmpeg_result.map_err(|_| ConversionError::UnreadableImage(image_crate_error.to_string()))
 }
 
@@ -127,12 +140,17 @@ fn render_svg(input_path: &Path, resize: ResizeOption) -> ConversionResult<Dynam
         intrinsic_size.height().ceil() as u32,
         resize,
     );
-    let mut pixmap = tiny_skia::Pixmap::new(target.width, target.height)
-        .ok_or_else(|| ConversionError::UnreadableImage("The SVG has no visible size".to_string()))?;
+    let mut pixmap = tiny_skia::Pixmap::new(target.width, target.height).ok_or_else(|| {
+        ConversionError::UnreadableImage("The SVG has no visible size".to_string())
+    })?;
 
     let scale_x = target.width as f32 / intrinsic_size.width();
     let scale_y = target.height as f32 / intrinsic_size.height();
-    resvg::render(&tree, tiny_skia::Transform::from_scale(scale_x, scale_y), &mut pixmap.as_mut());
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::from_scale(scale_x, scale_y),
+        &mut pixmap.as_mut(),
+    );
 
     let png_bytes = pixmap
         .encode_png()
@@ -155,9 +173,13 @@ fn shared_font_database() -> Arc<usvg::fontdb::Database> {
 }
 
 // Multi-page PDFs convert their first page, the one people expect to see.
-fn render_pdf_first_page(input_path: &Path, resize: ResizeOption) -> ConversionResult<DynamicImage> {
+fn render_pdf_first_page(
+    input_path: &Path,
+    resize: ResizeOption,
+) -> ConversionResult<DynamicImage> {
     let pdf_data = std::fs::read(input_path)?;
-    let pdf = Pdf::new(pdf_data).map_err(|error| ConversionError::UnreadableImage(format!("{error:?}")))?;
+    let pdf = Pdf::new(pdf_data)
+        .map_err(|error| ConversionError::UnreadableImage(format!("{error:?}")))?;
     let first_page = pdf
         .pages()
         .first()

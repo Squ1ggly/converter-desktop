@@ -17,8 +17,13 @@ pub struct Dimensions {
 pub fn target_dimensions(width: u32, height: u32, resize: ResizeOption) -> Dimensions {
     let scale_factor = match resize {
         ResizeOption::Original => None,
-        ResizeOption::Percent { percent } => Some(percent.clamp(MIN_PERCENT, MAX_PERCENT) as f64 / 100.0),
-        ResizeOption::Fit { max_width, max_height } => fit_scale_factor(width, height, max_width, max_height),
+        ResizeOption::Percent { percent } => {
+            Some(percent.clamp(MIN_PERCENT, MAX_PERCENT) as f64 / 100.0)
+        }
+        ResizeOption::Fit {
+            max_width,
+            max_height,
+        } => fit_scale_factor(width, height, max_width, max_height),
     };
 
     let Some(scale_factor) = scale_factor else {
@@ -32,9 +37,18 @@ pub fn target_dimensions(width: u32, height: u32, resize: ResizeOption) -> Dimen
     scaled_dimensions
 }
 
-fn fit_scale_factor(width: u32, height: u32, max_width: Option<u32>, max_height: Option<u32>) -> Option<f64> {
-    let width_ratio = max_width.filter(|limit| *limit > 0).map(|limit| limit as f64 / width as f64);
-    let height_ratio = max_height.filter(|limit| *limit > 0).map(|limit| limit as f64 / height as f64);
+fn fit_scale_factor(
+    width: u32,
+    height: u32,
+    max_width: Option<u32>,
+    max_height: Option<u32>,
+) -> Option<f64> {
+    let width_ratio = max_width
+        .filter(|limit| *limit > 0)
+        .map(|limit| limit as f64 / width as f64);
+    let height_ratio = max_height
+        .filter(|limit| *limit > 0)
+        .map(|limit| limit as f64 / height as f64);
 
     let scale_factor = match (width_ratio, height_ratio) {
         (Some(width_ratio), Some(height_ratio)) => Some(width_ratio.min(height_ratio)),
@@ -109,24 +123,39 @@ mod tests {
 
     #[test]
     fn fit_keeps_proportions_inside_the_box() {
-        let fit_box = ResizeOption::Fit { max_width: Some(800), max_height: Some(800) };
+        let fit_box = ResizeOption::Fit {
+            max_width: Some(800),
+            max_height: Some(800),
+        };
         assert_eq!(dimensions_of(4000, 3000, fit_box), (800, 600));
         assert_eq!(dimensions_of(400, 300, fit_box), (800, 600));
     }
 
     #[test]
     fn fit_with_one_side_blank_only_constrains_the_other() {
-        let width_only = ResizeOption::Fit { max_width: Some(1000), max_height: None };
+        let width_only = ResizeOption::Fit {
+            max_width: Some(1000),
+            max_height: None,
+        };
         assert_eq!(dimensions_of(4000, 3000, width_only), (1000, 750));
 
-        let nothing = ResizeOption::Fit { max_width: None, max_height: None };
+        let nothing = ResizeOption::Fit {
+            max_width: None,
+            max_height: None,
+        };
         assert_eq!(dimensions_of(4000, 3000, nothing), (4000, 3000));
     }
 
     #[test]
     fn percent_scales_both_sides_and_never_reaches_zero() {
-        assert_eq!(dimensions_of(4000, 3000, ResizeOption::Percent { percent: 25 }), (1000, 750));
-        assert_eq!(dimensions_of(3, 3, ResizeOption::Percent { percent: 1 }), (1, 1));
+        assert_eq!(
+            dimensions_of(4000, 3000, ResizeOption::Percent { percent: 25 }),
+            (1000, 750)
+        );
+        assert_eq!(
+            dimensions_of(3, 3, ResizeOption::Percent { percent: 1 }),
+            (1, 1)
+        );
     }
 
     #[test]
