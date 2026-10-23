@@ -224,7 +224,7 @@
 <Toaster position="bottom-center" />
 
 <Tooltip.Provider>
-  <div class="grid h-full grid-rows-[auto_1fr]">
+  <div class="flex h-full flex-col">
     <Toolbar
       isMac={platform === "macos"}
       hasFiles={!queue.isEmpty}
@@ -233,7 +233,7 @@
       onClear={() => queue.clear()}
     />
 
-    <main class="min-h-0">
+    <main class="min-h-0 flex-1">
       {#if startupError}
         <p class="text-destructive p-8 text-sm select-text" role="alert">Couldn't start: {startupError}</p>
       {:else if catalog && queue.isEmpty}

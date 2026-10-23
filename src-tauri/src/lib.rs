@@ -26,7 +26,7 @@ const MAIN_WINDOW_LABEL: &str = "main";
 // Centres the window buttons in the 52px toolbar (h-13 in Toolbar.svelte).
 // Measured: macOS offsets the buttons from this point, so it isn't (52 - 14) / 2.
 #[cfg(target_os = "macos")]
-const TRAFFIC_LIGHT_POSITION: (f64, f64) = (18.0, 25.0);
+const TRAFFIC_LIGHT_POSITION: (f64, f64) = (18.0, 27.0);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
