@@ -33,7 +33,7 @@
   const progressPercent = $derived(Math.round(item.progressPercent ?? 0));
 </script>
 
-<Item.Root size="sm" class={item.status === "failed" ? "bg-destructive/5" : ""} data-testid="file-row" data-status={item.status}>
+<Item.Root role="listitem" size="sm" class={item.status === "failed" ? "bg-destructive/5" : ""} data-testid="file-row" data-status={item.status}>
   <Item.Media variant="image" class="bg-muted text-muted-foreground">
     {#if showsPreview}
       <img src={item.previewUrl} alt="" loading="lazy" decoding="async" onerror={() => (hasPreviewFailed = true)} />
