@@ -1,0 +1,227 @@
+// End-to-end checks that run real conversions through the bundled FFmpeg:
+// every kind of input becomes every output format, and each result is read
+// back to prove it's a valid file (not just that no error was returned).
+
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
+
+use image::{Rgba, RgbaImage};
+use tokio_util::sync::CancellationToken;
+
+use crate::error::ConversionError;
+use crate::ffmpeg::Ffmpeg;
+use crate::formats::{ImageFormat, VideoFormat};
+use crate::image_conversion::{ImageConversion, convert_image};
+use crate::options::{ImageOptions, ResizeOption, VideoOptions, VideoQuality};
+use crate::video_conversion::{VideoConversion, convert_video};
+
+const ALL_IMAGE_OUTPUTS: [ImageFormat; 10] = [
+    ImageFormat::Jpg,
+    ImageFormat::Png,
+    ImageFormat::Webp,
+    ImageFormat::Avif,
+    ImageFormat::Heic,
+    ImageFormat::Gif,
+    ImageFormat::Bmp,
+    ImageFormat::Tiff,
+    ImageFormat::Pdf,
+    ImageFormat::Svg,
+];
+
+const ALL_VIDEO_OUTPUTS: [VideoFormat; 8] = [
+    VideoFormat::Mp4,
+    VideoFormat::Mov,
+    VideoFormat::Mkv,
+    VideoFormat::Webm,
+    VideoFormat::M4v,
+    VideoFormat::Avi,
+    VideoFormat::Flv,
+    VideoFormat::Gif,
+];
+
+const SAMPLE_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48">
+  <rect width="64" height="48" fill="#4f46e5"/><circle cx="32" cy="24" r="16" fill="white"/>
+</svg>"##;
+
+fn image_outputs_for_this_platform() -> Vec<ImageFormat> {
+    let outputs = ALL_IMAGE_OUTPUTS
+        .into_iter()
+        .filter(|format| *format != ImageFormat::Heic || cfg!(target_os = "macos"))
+        .collect();
+    outputs
+}
+
+// A half-transparent circle on a transparent background, with odd dimensions
+// to catch encoders that need even sizes.
+fn write_transparent_png(path: &Path) {
+    let image = RgbaImage::from_fn(121, 81, |x, y| {
+        let distance_x = x as f32 - 60.0;
+        let distance_y = y as f32 - 40.0;
+        let is_inside_circle = distance_x * distance_x + distance_y * distance_y < 35.0 * 35.0;
+        if is_inside_circle { Rgba([220, 40, 40, 160]) } else { Rgba([0, 0, 0, 0]) }
+    });
+    image.save(path).expect("write sample png");
+}
+
+async fn run_ffmpeg(ffmpeg: &Ffmpeg, arguments: &[&str]) {
+    let arguments: Vec<OsString> = arguments.iter().map(OsString::from).collect();
+    ffmpeg
+        .run(arguments, &CancellationToken::new(), |_| {})
+        .await
+        .expect("ffmpeg helper command");
+}
+
+// Decoding the whole file with FFmpeg is the strictest "is this valid" check
+// available for raster images and videos.
+async fn assert_decodes(ffmpeg: &Ffmpeg, path: &Path) {
+    let arguments: Vec<OsString> = vec!["-v".into(), "error".into(), "-i".into(), path.into(), "-f".into(), "null".into(), "-".into()];
+    let decode_result = ffmpeg.run(arguments, &CancellationToken::new(), |_| {}).await;
+    assert!(decode_result.is_ok(), "{} did not decode: {decode_result:?}", path.display());
+}
+
+async fn assert_valid_output(ffmpeg: &Ffmpeg, path: &Path) {
+    let bytes = std::fs::read(path).expect("output exists");
+    assert!(!bytes.is_empty(), "{} is empty", path.display());
+
+    let extension = path.extension().unwrap().to_string_lossy().into_owned();
+    match extension.as_str() {
+        "pdf" => assert!(bytes.starts_with(b"%PDF-"), "{} is not a PDF", path.display()),
+        "svg" => assert!(String::from_utf8_lossy(&bytes).contains("<svg"), "{} is not an SVG", path.display()),
+        _ => assert_decodes(ffmpeg, path).await,
+    }
+}
+
+async fn convert_image_to(input: &Path, format: ImageFormat, resize: ResizeOption, output_directory: &Path) -> Result<PathBuf, ConversionError> {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let input_stem = input.file_stem().unwrap().to_string_lossy();
+    let output_path = output_directory.join(format!("{input_stem}-{}.{}", input.extension().unwrap().to_string_lossy(), format.extension()));
+
+    let conversion = ImageConversion {
+        input_path: input,
+        output_path: &output_path,
+        format,
+        options: ImageOptions { quality: 80, resize },
+        ffmpeg: &ffmpeg,
+        scratch_root: output_directory,
+        cancellation: &CancellationToken::new(),
+    };
+    convert_image(conversion).await?;
+    Ok(output_path)
+}
+
+async fn prepare_image_inputs(directory: &Path) -> Vec<PathBuf> {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let png_path = directory.join("sample.png");
+    write_transparent_png(&png_path);
+
+    let svg_path = directory.join("vector.svg");
+    std::fs::write(&svg_path, SAMPLE_SVG).unwrap();
+
+    let jpeg_path = directory.join("photo.jpg");
+    let avif_path = directory.join("modern.avif");
+    let webp_path = directory.join("web.webp");
+    let png_text = png_path.to_string_lossy().into_owned();
+    run_ffmpeg(&ffmpeg, &["-i", &png_text, &jpeg_path.to_string_lossy()]).await;
+    run_ffmpeg(&ffmpeg, &["-i", &png_text, "-c:v", "libaom-av1", "-still-picture", "1", &avif_path.to_string_lossy()]).await;
+    run_ffmpeg(&ffmpeg, &["-i", &png_text, "-c:v", "libwebp", &webp_path.to_string_lossy()]).await;
+
+    // Our own PDF output doubles as a PDF input.
+    let pdf_path = convert_image_to(&png_path, ImageFormat::Pdf, ResizeOption::Original, directory).await.unwrap();
+
+    let mut inputs = vec![png_path, svg_path, jpeg_path, avif_path, webp_path, pdf_path];
+    if cfg!(target_os = "macos") {
+        let heic_path = convert_image_to(&inputs[0], ImageFormat::Heic, ResizeOption::Original, directory).await.unwrap();
+        inputs.push(heic_path);
+    }
+    inputs
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn every_image_input_converts_to_every_image_output() {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let input_directory = tempfile::tempdir().unwrap();
+    let output_directory = tempfile::tempdir().unwrap();
+    let inputs = prepare_image_inputs(input_directory.path()).await;
+
+    for input in &inputs {
+        for format in image_outputs_for_this_platform() {
+            let conversion_result = convert_image_to(input, format, ResizeOption::Original, output_directory.path()).await;
+            let output_path = conversion_result.unwrap_or_else(|error| panic!("{} → {format:?} failed: {error}", input.display()));
+            assert_valid_output(&ffmpeg, &output_path).await;
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn resizing_applies_to_raster_and_vector_inputs() {
+    let input_directory = tempfile::tempdir().unwrap();
+    let inputs = prepare_image_inputs(input_directory.path()).await;
+    let fit_width = ResizeOption::Fit { max_width: Some(200), max_height: None };
+
+    for input in inputs.iter().filter(|input| !input.to_string_lossy().ends_with(".pdf")) {
+        let output_path = convert_image_to(input, ImageFormat::Png, fit_width, input_directory.path()).await.unwrap();
+        let (width, _height) = image::image_dimensions(&output_path).unwrap();
+        assert_eq!(width, 200, "{} was not resized", input.display());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn every_video_output_is_playable() {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let directory = tempfile::tempdir().unwrap();
+    let input_path = directory.path().join("clip.mov");
+
+    // Odd frame size to check every encoder copes with it.
+    run_ffmpeg(
+        &ffmpeg,
+        &[
+            "-f", "lavfi", "-i", "testsrc=duration=1:size=321x241:rate=24",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+            "-shortest", &input_path.to_string_lossy(),
+        ],
+    )
+    .await;
+
+    for format in ALL_VIDEO_OUTPUTS {
+        let output_path = directory.path().join(format!("converted.{}", format.extension()));
+        let mut last_progress = 0.0_f32;
+        let conversion = VideoConversion {
+            input_path: &input_path,
+            output_path: &output_path,
+            format,
+            options: VideoOptions { quality: VideoQuality::Small, max_height: Some(120), frame_rate: None },
+            ffmpeg: &ffmpeg,
+            cancellation: &CancellationToken::new(),
+        };
+
+        let conversion_result = convert_video(conversion, |percent| last_progress = percent).await;
+        assert!(conversion_result.is_ok(), "clip → {format:?} failed: {conversion_result:?}");
+        assert_valid_output(&ffmpeg, &output_path).await;
+        assert!(last_progress > 0.0, "{format:?} reported no progress");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn cancelling_stops_ffmpeg() {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let directory = tempfile::tempdir().unwrap();
+    let output_path = directory.path().join("endless.mp4");
+    let cancellation = CancellationToken::new();
+
+    let cancel_soon = cancellation.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        cancel_soon.cancel();
+    });
+
+    // A 10-minute source that would take far longer than the test to encode.
+    let arguments: Vec<OsString> = ["-f", "lavfi", "-i", "testsrc=duration=600:size=1280x720", &output_path.to_string_lossy()]
+        .iter()
+        .map(OsString::from)
+        .collect();
+    let started_at = std::time::Instant::now();
+    let run_result = ffmpeg.run(arguments, &cancellation, |_| {}).await;
+
+    assert!(matches!(run_result, Err(ConversionError::Cancelled)));
+    assert!(started_at.elapsed() < std::time::Duration::from_secs(5));
+}
