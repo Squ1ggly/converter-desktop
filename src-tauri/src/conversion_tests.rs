@@ -309,6 +309,90 @@ async fn every_video_output_is_playable() {
     }
 }
 
+// Reads "WxH" and fps from FFmpeg's description of the first video stream.
+fn describe_video(ffmpeg: &Ffmpeg, path: &Path) -> (u32, u32, f32) {
+    let output = std::process::Command::new(ffmpeg.binary_path())
+        .arg("-i")
+        .arg(path)
+        .output()
+        .expect("run ffmpeg");
+    let log = String::from_utf8_lossy(&output.stderr);
+    let video_line = log
+        .lines()
+        .find(|line| line.contains("Video:"))
+        .expect("video stream");
+
+    let size = video_line
+        .split(", ")
+        .find_map(|part| {
+            let (width, height) = part.split_whitespace().next()?.split_once('x')?;
+            Some((width.parse().ok()?, height.parse().ok()?))
+        })
+        .expect("frame size");
+    let frame_rate = video_line
+        .split(", ")
+        .find_map(|part| part.strip_suffix(" fps")?.parse().ok())
+        .expect("frame rate");
+
+    let description = (size.0, size.1, frame_rate);
+    description
+}
+
+async fn convert_test_clip(source: &str, options: VideoOptions) -> (u32, u32, f32) {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let directory = tempfile::tempdir().unwrap();
+    let input_path = directory.path().join("source.mp4");
+    let output_path = directory.path().join("converted.mp4");
+    run_ffmpeg(
+        &ffmpeg,
+        &["-f", "lavfi", "-i", source, &input_path.to_string_lossy()],
+    )
+    .await;
+
+    let conversion = VideoConversion {
+        input_path: &input_path,
+        output_path: &output_path,
+        format: VideoFormat::Mp4,
+        options,
+        ffmpeg: &ffmpeg,
+        cancellation: &CancellationToken::new(),
+    };
+    convert_video(conversion, |_| {})
+        .await
+        .expect("convert clip");
+
+    let description = describe_video(&ffmpeg, &output_path);
+    description
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn resolution_limits_the_shorter_side_of_portrait_video() {
+    let options = VideoOptions {
+        quality: VideoQuality::Small,
+        max_height: Some(120),
+        frame_rate: Some(15),
+    };
+    let (width, height, frame_rate) =
+        convert_test_clip("testsrc=duration=1:size=240x480:rate=30", options).await;
+
+    assert_eq!((width, height), (120, 240));
+    assert_eq!(frame_rate, 15.0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn limits_never_enlarge_or_speed_up_video() {
+    let options = VideoOptions {
+        quality: VideoQuality::Small,
+        max_height: Some(1080),
+        frame_rate: Some(60),
+    };
+    let (width, height, frame_rate) =
+        convert_test_clip("testsrc=duration=1:size=480x240:rate=24", options).await;
+
+    assert_eq!((width, height), (480, 240));
+    assert_eq!(frame_rate, 24.0);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn cancelling_stops_ffmpeg() {
     let ffmpeg = Ffmpeg::from_downloaded_binary();

@@ -38,6 +38,11 @@ impl Ffmpeg {
         Ok(ffmpeg)
     }
 
+    #[cfg(test)]
+    pub fn binary_path(&self) -> &std::path::Path {
+        &self.binary_path
+    }
+
     // Tests run from target/debug/deps, where no sidecar is copied.
     #[cfg(test)]
     pub fn from_downloaded_binary() -> Ffmpeg {
@@ -52,7 +57,7 @@ impl Ffmpeg {
                             .is_some_and(|name| name.to_string_lossy().starts_with("ffmpeg-"))
                     })
             })
-            .expect("No FFmpeg in src-tauri/binaries. Run `bun run fetch-ffmpeg` first.");
+            .expect("No FFmpeg in src-tauri/binaries. Run `pnpm fetch-ffmpeg` first.");
 
         Ffmpeg { binary_path }
     }

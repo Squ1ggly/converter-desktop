@@ -55,32 +55,41 @@ fn build_arguments(
     arguments
 }
 
-// yuv420p needs even dimensions. `max_height` only ever shrinks.
+// The limit applies to the shorter side, so "720p" works for portrait video
+// too. Never enlarges. yuv420p needs even dimensions.
 fn scale_filter(max_height: Option<u32>) -> String {
-    let filter = match max_height {
-        Some(max_height) => format!("scale=-2:'trunc(min(ih,{max_height})/2)*2'"),
-        None => "scale='trunc(iw/2)*2':'trunc(ih/2)*2'".to_string(),
+    let Some(limit) = max_height else {
+        return "scale='trunc(iw/2)*2':'trunc(ih/2)*2'".to_string();
     };
+
+    let filter = format!(
+        "scale=w='if(gte(iw,ih),-2,trunc(min(iw,{limit})/2)*2)':h='if(gte(iw,ih),trunc(min(ih,{limit})/2)*2,-2)'"
+    );
     filter
 }
 
+// Only ever lowers the frame rate.
 fn frame_rate_arguments(frame_rate: Option<u32>) -> Vec<OsString> {
     let Some(frame_rate) = frame_rate else {
         return Vec::new();
     };
 
-    let arguments = vec!["-r".into(), frame_rate.to_string().into()];
+    let arguments = vec!["-fpsmax".into(), frame_rate.to_string().into()];
     arguments
 }
 
 // A palette built from the clip looks far better than a generic one.
 fn gif_arguments(options: VideoOptions) -> Vec<OsString> {
     let frame_rate = options.frame_rate.unwrap_or(DEFAULT_GIF_FRAME_RATE);
-    let height_limit = options.max_height.map_or("ih".to_string(), |max_height| {
-        format!("min(ih,{max_height})")
-    });
+    let scale = options
+        .max_height
+        .map_or("scale=iw:ih".to_string(), |limit| {
+            format!(
+                "scale=w='if(gte(iw,ih),-1,min(iw,{limit}))':h='if(gte(iw,ih),min(ih,{limit}),-1)'"
+            )
+        });
     let filter = format!(
-        "fps={frame_rate},scale=-2:'{height_limit}':flags=lanczos,split[frames][palette_source];\
+        "fps=fps='min(source_fps,{frame_rate})',{scale}:flags=lanczos,split[frames][palette_source];\
          [palette_source]palettegen[palette];[frames][palette]paletteuse"
     );
 
@@ -208,7 +217,21 @@ mod tests {
             ..BALANCED
         };
         let arguments = arguments_as_text(VideoFormat::Mkv, options);
-        assert!(arguments.contains(&"scale=-2:'trunc(min(ih,720)/2)*2'".to_string()));
+        let scale_filter = arguments
+            .iter()
+            .find(|argument| argument.starts_with("scale="))
+            .expect("has a scale filter");
+        assert!(scale_filter.contains("min(iw,720)") && scale_filter.contains("min(ih,720)"));
+    }
+
+    #[test]
+    fn frame_rate_is_a_maximum() {
+        let options = VideoOptions {
+            frame_rate: Some(30),
+            ..BALANCED
+        };
+        let arguments = arguments_as_text(VideoFormat::Mp4, options);
+        assert!(arguments.windows(2).any(|pair| pair == ["-fpsmax", "30"]));
     }
 
     #[test]
