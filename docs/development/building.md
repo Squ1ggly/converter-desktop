@@ -39,7 +39,7 @@ Without it, `pnpm dev` and `pnpm build` fail because the sidecar is missing.
 | `cargo fmt --manifest-path src-tauri/Cargo.toml --check` | Checks Rust formatting |
 | `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` | Lints the Rust code |
 
-For tests, see [Testing](testing.md).
+For tests, see [Testing](../../CONTRIBUTING.md#testing).
 
 ## FFmpeg
 

@@ -43,8 +43,43 @@ locally:
 pnpm install
 pnpm fetch-ffmpeg
 pnpm check
+pnpm test:ui
 pnpm ui:build
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
+
+## Testing
+
+There are three suites.
+
+| Suite | Command | What it covers |
+|---|---|---|
+| Rust | `cargo test --manifest-path src-tauri/Cargo.toml` | Every conversion, run through the downloaded FFmpeg |
+| UI | `pnpm test:ui` | The Svelte UI in WebKit and Chromium, with the backend mocked |
+| End-to-end | `pnpm test:e2e` | The built app converting real files, Linux and Windows only |
+
+### UI tests
+
+`tests/ui/` holds Playwright tests that run the real UI from the Vite dev server.
+`tests/ui/support/mock-backend.ts` stands in for the Rust side: it answers every Tauri command,
+plays native dialogs and file drops, and streams conversion events. Tests start the app with
+`launchConverter()` and drive the backend through the `MockBackend` it returns. WebKit is what
+macOS and Linux use, Chromium is what WebView2 on Windows uses.
+
+Install the browsers once with `pnpm exec playwright install chromium webkit`.
+
+`pnpm screenshots` saves PNGs of the main states in light and dark mode to
+`test-results/screenshots/`, or to `SCREENSHOT_DIR` if set.
+
+### End-to-end tests
+
+`tests/e2e/` holds WebdriverIO tests that build a debug copy of the app, start it through
+[tauri-driver](https://v2.tauri.app/develop/tests/webdriver/) and convert sample files made with
+the FFmpeg from `pnpm fetch-ffmpeg`. They check the converted files on disk.
+
+tauri-driver has no macOS support, because macOS has no WebDriver for its webview. CI runs these
+tests on Linux and Windows. To run them locally on Linux, install `webkit2gtk-driver` and
+`cargo install tauri-driver --locked`. On Windows, also put a `msedgedriver` that matches the
+installed WebView2 on your `PATH`.

@@ -39,7 +39,7 @@ pnpm dev            # runs the app with hot reload
   settings and troubleshooting
 - [Architecture](docs/development/architecture.md)
 - [Building](docs/development/building.md)
-- [Testing](docs/development/testing.md)
+- [Testing](CONTRIBUTING.md#testing)
 - [Releasing](docs/development/releasing.md)
 - [Contributing](CONTRIBUTING.md)
 

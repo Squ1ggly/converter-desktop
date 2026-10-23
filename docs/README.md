@@ -22,5 +22,5 @@ Converter turns images and videos into other formats on your own computer. Files
 |---|---|
 | [Architecture](development/architecture.md) | How the UI, the Rust backend and FFmpeg fit together |
 | [Building](development/building.md) | Prerequisites, pnpm commands, fetching FFmpeg and building installers |
-| [Testing](development/testing.md) | Running the tests |
+| [Testing](../CONTRIBUTING.md#testing) | Running the tests |
 | [Releasing](development/releasing.md) | Commit messages, the release PR and published installers |
