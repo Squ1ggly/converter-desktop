@@ -1,39 +1,72 @@
 <script lang="ts">
+  import ChevronLeftIcon from "@lucide/svelte/icons/chevron-left";
+  import CircleHelpIcon from "@lucide/svelte/icons/circle-help";
   import PlusIcon from "@lucide/svelte/icons/plus";
+  import SettingsIcon from "@lucide/svelte/icons/settings";
   import { Button } from "$lib/components/ui/button/index.js";
+  import type { AppView } from "$lib/views";
+  import IconAction from "./IconAction.svelte";
 
   interface Props {
+    view: AppView;
     isMac: boolean;
     hasFiles: boolean;
     isConverting: boolean;
     onAddFiles: () => void;
     onClear: () => void;
+    onToggleView: (view: AppView) => void;
+    onBack: () => void;
   }
 
-  let { isMac, hasFiles, isConverting, onAddFiles, onClear }: Props = $props();
+  let { view, isMac, hasFiles, isConverting, onAddFiles, onClear, onToggleView, onBack }: Props = $props();
+
+  const PAGE_TITLES: Record<AppView, string> = {
+    converter: "Converter",
+    settings: "Settings",
+    help: "Help",
+  };
+
+  const pageTitle = $derived(PAGE_TITLES[view]);
+  // Other platforms already show "Converter" in their native title bar.
+  const showsInlineTitle = $derived(!isMac && view !== "converter");
 </script>
 
-<!-- On macOS this replaces the title bar, so it shows the title and is the drag
-     area. Other platforms keep their native title bar. -->
-{#if isMac || hasFiles}
-  <header class="bg-background relative flex h-13 shrink-0 items-center justify-end border-b px-3" data-tauri-drag-region>
-    {#if isMac}
-      <h1
-        class="text-muted-foreground pointer-events-none absolute inset-x-0 text-center text-[13px] font-normal"
-        data-tauri-drag-region
-      >
-        Converter
-      </h1>
-    {/if}
+<!-- On macOS this replaces the title bar, so it is also the window drag area. -->
+<header
+  class="bg-background relative flex h-13 shrink-0 items-center gap-2 border-b px-3 {isMac ? 'pl-21' : ''}"
+  data-tauri-drag-region
+>
+  {#if isMac}
+    <h1
+      class="text-muted-foreground pointer-events-none absolute inset-x-0 text-center text-[13px] font-normal"
+      data-tauri-drag-region
+    >
+      {pageTitle}
+    </h1>
+  {:else}
+    <h1 class={showsInlineTitle ? "order-1 text-sm font-medium" : "sr-only"}>{pageTitle}</h1>
+  {/if}
 
-    {#if hasFiles}
-      <div class="relative flex gap-2">
-        <Button variant="ghost" size="sm" onclick={onClear} disabled={isConverting}>Clear</Button>
-        <Button variant="outline" size="sm" onclick={onAddFiles} disabled={isConverting}>
-          <PlusIcon />
-          Add files
-        </Button>
-      </div>
+  {#if view !== "converter"}
+    <Button variant="ghost" size="sm" class="relative" onclick={onBack}>
+      <ChevronLeftIcon />
+      Back
+    </Button>
+  {/if}
+
+  <div class="relative order-2 ml-auto flex items-center gap-1">
+    {#if view === "converter" && hasFiles}
+      <Button variant="ghost" size="sm" onclick={onClear} disabled={isConverting}>Clear</Button>
+      <Button variant="outline" size="sm" class="mr-2" onclick={onAddFiles} disabled={isConverting}>
+        <PlusIcon />
+        Add files
+      </Button>
     {/if}
-  </header>
-{/if}
+    <IconAction label="Settings" isPressed={view === "settings"} onclick={() => onToggleView("settings")}>
+      <SettingsIcon />
+    </IconAction>
+    <IconAction label="Help" isPressed={view === "help"} onclick={() => onToggleView("help")}>
+      <CircleHelpIcon />
+    </IconAction>
+  </div>
+</header>

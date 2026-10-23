@@ -4,13 +4,17 @@
   import { toast } from "svelte-sonner";
   import type { Event as TauriEvent } from "@tauri-apps/api/event";
   import { getCurrentWebview, type DragDropEvent } from "@tauri-apps/api/webview";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { open } from "@tauri-apps/plugin-dialog";
   import { Toaster } from "$lib/components/ui/sonner/index.js";
   import * as Tooltip from "$lib/components/ui/tooltip/index.js";
   import DropOverlay from "$lib/components/DropOverlay.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import FileList from "$lib/components/FileList.svelte";
+  import HelpView from "$lib/components/HelpView.svelte";
+  import QuitDialog from "$lib/components/QuitDialog.svelte";
   import SettingsPanel from "$lib/components/SettingsPanel.svelte";
+  import SettingsView from "$lib/components/SettingsView.svelte";
   import Toolbar from "$lib/components/Toolbar.svelte";
   import {
     cancelConversion,
@@ -20,12 +24,14 @@
     openOutput,
     revealOutput,
     type ConversionCatalog,
+    type ConversionRequest,
     type FormatOption,
   } from "$lib/backend";
   import { isPrimaryModifierPressed, pluralise, revealInFolderLabel } from "$lib/formatting";
   import { PreferenceStore } from "$lib/preferences.svelte";
   import { FileQueue } from "$lib/queue.svelte";
   import { buildConversionRequests } from "$lib/requests";
+  import type { AppView } from "$lib/views";
 
   const MAX_NAMES_IN_TOAST = 3;
 
@@ -38,6 +44,9 @@
   let isDraggingFiles = $state(false);
   let activeBatchIds = $state<string[]>([]);
   let isCancelling = $state(false);
+  let activeRun: Promise<void> = Promise.resolve();
+  let view = $state<AppView>("converter");
+  let isQuitDialogOpen = $state(false);
 
   const platform = $derived(catalog?.platform ?? "");
   const revealLabel = $derived(revealInFolderLabel(platform));
@@ -100,6 +109,7 @@
     try {
       const inspectedFiles = await inspectPaths(paths);
       queue.startNextBatchIfFinished();
+      view = "converter";
       const skippedNames = queue.add(inspectedFiles);
 
       if (skippedNames.length > 0) {
@@ -144,14 +154,21 @@
     const requests = buildConversionRequests(queue.items, $state.snapshot(preferenceStore.values));
     activeBatchIds = requests.map((request) => request.batchId);
 
-    try {
-      const batchRuns = requests.map((request) => convertFiles(request, (event) => queue.applyEvent(event)));
-      await Promise.all(batchRuns);
-    } catch (error) {
-      queue.markUnfinishedAsFailed(errorMessageOf(error));
-    } finally {
-      activeBatchIds = [];
+    activeRun = Promise.all(requests.map(runBatch)).then(() => {
       isCancelling = false;
+    });
+    await activeRun;
+  }
+
+  // Images and videos run as separate batches; a failure only affects its own.
+  async function runBatch(request: ConversionRequest): Promise<void> {
+    try {
+      await convertFiles(request, (event) => queue.applyEvent(event));
+    } catch (error) {
+      const fileIds = request.files.map((file) => file.fileId);
+      queue.markUnfinishedAsFailed(fileIds, errorMessageOf(error));
+    } finally {
+      activeBatchIds = activeBatchIds.filter((batchId) => batchId !== request.batchId);
     }
   }
 
@@ -185,28 +202,65 @@
     }
   }
 
-  function handleKeydown(event: KeyboardEvent): void {
+  function toggleView(target: AppView): void {
+    view = view === target ? "converter" : target;
+  }
+
+  function convertFromAnyView(): void {
+    view = "converter";
+    void startConversion();
+  }
+
+  // Shortcut labels per OS live in shortcutKeys (formatting.ts).
+  function shortcutActionFor(event: KeyboardEvent): (() => void) | null {
+    if (event.key === "F1") {
+      return () => toggleView("help");
+    }
     if (!isPrimaryModifierPressed(event, platform)) {
-      return;
+      return null;
     }
 
-    if (event.key.toLowerCase() === "o") {
-      event.preventDefault();
-      void chooseFiles();
+    const actionsByKey: Record<string, () => void> = {
+      o: () => void chooseFiles(),
+      enter: convertFromAnyView,
+      ",": () => toggleView("settings"),
+    };
+    const action = actionsByKey[event.key.toLowerCase()] ?? null;
+    return action;
+  }
+
+  function handleKeydown(event: KeyboardEvent): void {
+    const action = shortcutActionFor(event);
+    if (!action) {
       return;
     }
-    if (event.key === "Enter") {
-      event.preventDefault();
-      void startConversion();
+    event.preventDefault();
+    action();
+  }
+
+  // Closing mid-conversion asks first, so nothing is left half-written.
+  function guardWindowClose(event: { preventDefault: () => void }): void {
+    if (!queue.isConverting) {
+      return;
     }
+    event.preventDefault();
+    isQuitDialogOpen = true;
+  }
+
+  async function quitAfterCancelling(): Promise<void> {
+    await cancelActiveConversion();
+    await activeRun;
+    await getCurrentWindow().destroy();
   }
 
   onMount(() => {
     void initialise();
-    const stopListeningPromise = getCurrentWebview().onDragDropEvent(handleDragDrop);
+    const stopDragDropPromise = getCurrentWebview().onDragDropEvent(handleDragDrop);
+    const stopCloseGuardPromise = getCurrentWindow().onCloseRequested(guardWindowClose);
 
     return () => {
-      void stopListeningPromise.then((stopListening) => stopListening());
+      void stopDragDropPromise.then((stopListening) => stopListening());
+      void stopCloseGuardPromise.then((stopListening) => stopListening());
     };
   });
 
@@ -226,16 +280,23 @@
 <Tooltip.Provider>
   <div class="flex h-full flex-col">
     <Toolbar
+      {view}
       isMac={platform === "macos"}
       hasFiles={!queue.isEmpty}
       isConverting={queue.isConverting}
       onAddFiles={chooseFiles}
       onClear={() => queue.clear()}
+      onToggleView={toggleView}
+      onBack={() => (view = "converter")}
     />
 
     <main class="min-h-0 flex-1">
       {#if startupError}
         <p class="text-destructive p-8 text-sm select-text" role="alert">Couldn't start: {startupError}</p>
+      {:else if view === "help"}
+        <HelpView />
+      {:else if catalog && view === "settings"}
+        <SettingsView {catalog} bind:preferences={preferenceStore.values} isConverting={queue.isConverting} />
       {:else if catalog && queue.isEmpty}
         <EmptyState
           imageExtensions={catalog.imageInputExtensions}
@@ -278,3 +339,5 @@
 {#if isDraggingFiles}
   <DropOverlay />
 {/if}
+
+<QuitDialog bind:open={isQuitDialogOpen} onQuit={quitAfterCancelling} />

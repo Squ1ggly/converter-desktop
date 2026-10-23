@@ -160,9 +160,11 @@ export class FileQueue {
 
   // Covers files whose batch ended without an event for them, e.g. if the
   // backend returned an error before starting.
-  markUnfinishedAsFailed(message: string): void {
+  markUnfinishedAsFailed(itemIds: string[], message: string): void {
+    const affectedIds = new Set(itemIds);
     for (const item of this.items) {
-      if (!IN_PROGRESS_STATUSES.has(item.status)) {
+      const isAffected = affectedIds.has(item.id) && IN_PROGRESS_STATUSES.has(item.status);
+      if (!isAffected) {
         continue;
       }
       item.status = "failed";

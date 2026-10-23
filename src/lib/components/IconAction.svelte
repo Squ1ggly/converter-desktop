@@ -6,17 +6,28 @@
   interface Props {
     label: string;
     disabled?: boolean;
+    // For toggles, e.g. the toolbar button of the page that's open.
+    isPressed?: boolean;
     onclick: () => void;
     children: Snippet;
   }
 
-  let { label, disabled = false, onclick, children }: Props = $props();
+  let { label, disabled = false, isPressed, onclick, children }: Props = $props();
 </script>
 
 <Tooltip.Root>
   <Tooltip.Trigger>
     {#snippet child({ props })}
-      <Button {...props} variant="ghost" size="icon-sm" aria-label={label} {disabled} {onclick}>
+      <Button
+        {...props}
+        variant="ghost"
+        size="icon-sm"
+        class={isPressed ? "bg-muted text-foreground" : ""}
+        aria-label={label}
+        aria-pressed={isPressed}
+        {disabled}
+        {onclick}
+      >
         {@render children()}
       </Button>
     {/snippet}
