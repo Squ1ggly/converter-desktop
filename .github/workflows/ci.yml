@@ -96,7 +96,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf webkit2gtk-driver xvfb
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf webkitgtk-webdriver xvfb
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -114,6 +114,15 @@ jobs:
           cargo install --git https://github.com/chippers/msedgedriver-tool
           & "$HOME/.cargo/bin/msedgedriver-tool.exe"
           $PWD.Path >> $env:GITHUB_PATH
+
+      # WebView2 150+ ignores msedgedriver's WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS when the
+      # app runs elevated, as it does on GitHub runners, so the debugging port is set by policy.
+      - name: Allow WebView2 remote debugging
+        if: runner.os == 'Windows'
+        run: |
+          $key = "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments"
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name "converter.exe" -Value "--remote-debugging-port=0" -Force | Out-Null
 
       - uses: pnpm/action-setup@v6
 
@@ -137,3 +146,11 @@ jobs:
       - name: Run end-to-end tests (Windows)
         if: runner.os == 'Windows'
         run: pnpm test:e2e
+
+      - name: Upload the app logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-app-logs-${{ matrix.os }}
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/com.squ1ggly.converter/logs/' || '~/.local/share/com.squ1ggly.converter/logs/' }}
+          retention-days: 7
