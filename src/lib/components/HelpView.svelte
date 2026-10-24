@@ -65,7 +65,7 @@
 
   <ScrollArea class="min-h-0">
     <!-- Bundled from docs/ at build time, so the HTML is trusted. -->
-    <article bind:this={article} class="prose prose-sm prose-neutral dark:prose-invert max-w-2xl scroll-mt-4 px-8 py-6 select-text">
+    <article bind:this={article} class="prose prose-sm prose-neutral dark:prose-invert prose-code:before:content-none prose-code:after:content-none prose-h1:text-2xl prose-h1:font-semibold max-w-2xl scroll-mt-4 px-8 py-6 select-text">
       {@html currentPage?.html ?? ""}
     </article>
   </ScrollArea>
