@@ -80,6 +80,9 @@ Install the browsers once with `pnpm exec playwright install chromium webkit`.
 the FFmpeg from `pnpm fetch-ffmpeg`. They check the converted files on disk.
 
 tauri-driver has no macOS support, because macOS has no WebDriver for its webview. CI runs these
-tests on Linux and Windows. To run them locally on Linux, install `webkit2gtk-driver` and
+tests on Linux and Windows. To run them locally on Linux, install the WebKitGTK WebDriver
+(`webkitgtk-webdriver` on Ubuntu 26.04, `webkit2gtk-driver` on older releases) and
 `cargo install tauri-driver --locked`. On Windows, also put a `msedgedriver` that matches the
-installed WebView2 on your `PATH`.
+installed WebView2 on your `PATH`, and run the tests from a terminal that isn't elevated. WebView2
+150 and later ignores the driver's settings for an app running as administrator, so the session
+never starts.

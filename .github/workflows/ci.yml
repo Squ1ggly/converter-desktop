@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, ci/fix-e2e]
+    branches: [main]
   pull_request:
 
 concurrency:
@@ -115,6 +115,8 @@ jobs:
           & "$HOME/.cargo/bin/msedgedriver-tool.exe"
           $PWD.Path >> $env:GITHUB_PATH
 
+      # WebView2 150+ ignores msedgedriver's WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS when the
+      # app runs elevated, as it does on GitHub runners, so the debugging port is set by policy.
       - name: Allow WebView2 remote debugging
         if: runner.os == 'Windows'
         run: |
@@ -141,20 +143,14 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" pnpm test:e2e
 
-      - name: Debug WebDriver (Windows)
-        if: runner.os == 'Windows'
-        run: ./.github/e2e-debug.ps1
-
       - name: Run end-to-end tests (Windows)
         if: runner.os == 'Windows'
         run: pnpm test:e2e
 
-      - name: Upload debug output
-        if: always()
+      - name: Upload the app logs
+        if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-debug-${{ matrix.os }}
-          path: |
-            e2e-debug/
-            ${{ runner.os == 'Windows' && '~/AppData/Local/com.squ1ggly.converter/logs/' || '~/.local/share/com.squ1ggly.converter/logs/' }}
+          name: e2e-app-logs-${{ matrix.os }}
+          path: ${{ runner.os == 'Windows' && '~/AppData/Local/com.squ1ggly.converter/logs/' || '~/.local/share/com.squ1ggly.converter/logs/' }}
           retention-days: 7
