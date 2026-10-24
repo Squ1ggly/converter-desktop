@@ -95,6 +95,41 @@ for (const expected of PLATFORMS) {
 
       await expect(fileRow(page, "beach.png").getByRole("button", { name: expected.revealLabel })).toBeVisible();
     });
+
+    test(`${expected.modifierKey}+, opens and closes Settings`, async ({ page }) => {
+      await launchConverter(page, { platform: expected.platform });
+      const settingsButton = page.getByRole("banner").getByRole("button", { name: "Settings" });
+
+      await page.keyboard.press(`${expected.modifierKey}+Comma`);
+      await expect(settingsButton).toHaveAttribute("aria-pressed", "true");
+
+      await page.keyboard.press(`${expected.modifierKey}+Comma`);
+      await expect(settingsButton).toHaveAttribute("aria-pressed", "false");
+    });
+
+    test("F1 opens and closes Help", async ({ page }) => {
+      await launchConverter(page, { platform: expected.platform });
+      const helpButton = page.getByRole("banner").getByRole("button", { name: "Help" });
+
+      await page.keyboard.press("F1");
+      await expect(helpButton).toHaveAttribute("aria-pressed", "true");
+
+      await page.keyboard.press("F1");
+      await expect(helpButton).toHaveAttribute("aria-pressed", "false");
+    });
+
+    test(`${expected.modifierKey}+Enter on Settings goes back to the list and converts`, async ({ page }) => {
+      const backend = await launchWithFiles(page, [BEACH_PHOTO], { platform: expected.platform });
+      await page.keyboard.press(`${expected.modifierKey}+Comma`);
+      await expect(page.getByRole("heading", { name: "Appearance" })).toBeVisible();
+
+      await page.keyboard.press(`${expected.modifierKey}+Enter`);
+
+      await expect(page.getByRole("heading", { name: "1 file converted" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Appearance" })).toBeHidden();
+      const { conversionRequests } = await backend.readLog();
+      expect(conversionRequests).toHaveLength(1);
+    });
   });
 }
 

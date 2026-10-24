@@ -106,3 +106,17 @@ test("Fit limits the width and height", async ({ page }) => {
   const settings = await convertAndReadImageSettings(page, backend);
   expect(settings).toMatchObject({ options: { resize: { mode: "fit", maxWidth: 1920, maxHeight: null } } });
 });
+
+test("the selected size and the selected format look the same", async ({ page }) => {
+  await launchWithFiles(page, [BEACH_PHOTO]);
+  const selectedFormat = imageSettings(page).getByRole("radio", { name: "JPG" });
+  const selectedSize = imageSettings(page).getByRole("radio", { name: "Fit" });
+
+  await selectedSize.click();
+
+  await expect(selectedFormat).toHaveAttribute("data-state", "on");
+  await expect(selectedSize).toHaveAttribute("data-state", "on");
+  const formatBackground = await selectedFormat.evaluate((element) => getComputedStyle(element).backgroundColor);
+  const sizeBackground = await selectedSize.evaluate((element) => getComputedStyle(element).backgroundColor);
+  expect(sizeBackground).toBe(formatBackground);
+});

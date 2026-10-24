@@ -9,6 +9,8 @@ import { promisify } from "node:util";
 const runExecutable = promisify(execFile);
 
 const BINARIES_DIRECTORY = path.resolve(import.meta.dirname, "..", "..", "src-tauri", "binaries");
+// `pnpm fetch-ffmpeg` saves it as converter-ffmpeg-<target triple>[.exe].
+const FFMPEG_FILE_PREFIX = "converter-ffmpeg-";
 
 export interface SampleMedia {
   folder: string;
@@ -29,7 +31,7 @@ export const MP4_SIGNATURE: FileSignature = { offset: 4, text: "ftyp" };
 
 async function findDownloadedFfmpeg(): Promise<string> {
   const fileNames = await readdir(BINARIES_DIRECTORY).catch(() => []);
-  const ffmpegFileName = fileNames.find((fileName) => fileName.startsWith("ffmpeg-"));
+  const ffmpegFileName = fileNames.find((fileName) => fileName.startsWith(FFMPEG_FILE_PREFIX));
 
   if (!ffmpegFileName) {
     throw new Error("No FFmpeg in src-tauri/binaries. Run `pnpm fetch-ffmpeg` first.");

@@ -73,5 +73,21 @@ for (const colorScheme of COLOR_SCHEMES) {
 
       await saveScreenshot(page, "6-drag-overlay", colorScheme);
     });
+
+    test("settings page", async ({ page }) => {
+      await launchConverter(page);
+      await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+      await expect(page.getByRole("heading", { name: "Appearance" })).toBeVisible();
+
+      await saveScreenshot(page, "7-settings", colorScheme);
+    });
+
+    test("help page", async ({ page }) => {
+      await launchConverter(page);
+      await page.getByRole("banner").getByRole("button", { name: "Help" }).click();
+      await expect(page.getByRole("article").getByRole("heading", { level: 1 })).toBeVisible();
+
+      await saveScreenshot(page, "8-help", colorScheme);
+    });
   });
 }

@@ -1,6 +1,6 @@
 // Shared between the Playwright tests (Node) and the mock backend (browser).
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
-import type { ConversionEvent, ConversionRequest } from "$lib/backend";
+import type { ConversionEvent, ConversionRequest, MediaKind } from "$lib/backend";
 import type { Preferences } from "$lib/preferences.svelte";
 
 export type Platform = "macos" | "windows" | "linux";
@@ -33,6 +33,9 @@ export interface BackendLog {
   cancelledBatchIds: string[];
   openedOutputs: string[];
   revealedOutputs: string[];
+  openedUrls: string[];
+  // One entry per window destroy, with how many batches were still running then.
+  windowDestroys: { runningBatchCount: number }[];
   storedPreferences: Partial<Preferences> | null;
 }
 
@@ -41,6 +44,9 @@ export interface MockBackendControls {
   setNextDialogResult(result: string[] | string | null): void;
   emitDragEvent(type: DragEventType, paths: string[]): Promise<void>;
   sendFileEvent(fileName: string, event: FileConversionEvent): void;
+  // Makes that kind's convert_files call fail, as when the Rust command returns an error.
+  failBatch(kind: MediaKind, message: string): void;
+  requestWindowClose(): Promise<void>;
   readLog(): BackendLog;
 }
 

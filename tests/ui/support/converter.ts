@@ -1,6 +1,7 @@
 // What the UI tests import: a `test` that fails on uncaught page errors, and
 // launchConverter(), which opens the app against the mock backend.
 import { test as base, expect, type Locator, type Page } from "@playwright/test";
+import type { MediaKind } from "$lib/backend";
 import type { BackendLog, FileConversionEvent, MockScenario } from "./scenario";
 
 export { expect };
@@ -67,6 +68,18 @@ export class MockBackend {
 
   async failFile(fileName: string, message: string): Promise<void> {
     await this.#sendFileEvent(fileName, { type: "failed", message });
+  }
+
+  async failBatch(kind: MediaKind, message: string): Promise<void> {
+    await this.#page.evaluate(
+      ({ batchKind, errorMessage }) => window.converterMockBackend.failBatch(batchKind, errorMessage),
+      { batchKind: kind, errorMessage: message },
+    );
+  }
+
+  // Like clicking the window's close button.
+  async requestWindowClose(): Promise<void> {
+    await this.#page.evaluate(() => window.converterMockBackend.requestWindowClose());
   }
 
   async readLog(): Promise<BackendLog> {

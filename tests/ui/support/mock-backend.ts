@@ -36,10 +36,12 @@ interface ActiveBatch {
   nextMessageIndex: number;
   unfinishedFileIds: Set<string>;
   resolve: () => void;
+  reject: (message: string) => void;
 }
 
 type DialogResult = string[] | string | null;
 
+const CLOSE_REQUESTED_EVENT = "tauri://close-requested";
 const DRAG_EVENT_NAMES: Record<DragEventType, string> = {
   enter: "tauri://drag-enter",
   drop: "tauri://drag-drop",
@@ -71,6 +73,8 @@ const backendLog: BackendLog = {
   cancelledBatchIds: [],
   openedOutputs: [],
   revealedOutputs: [],
+  openedUrls: [],
+  windowDestroys: [],
   storedPreferences: scenario.savedPreferences,
 };
 
@@ -126,10 +130,25 @@ function sendChannelMessage(batch: ActiveBatch, content: { message: ConversionEv
   window.__TAURI_INTERNALS__.runCallback(batch.channelId, channelMessage);
 }
 
-function finishBatch(batch: ActiveBatch): void {
+function endBatch(batch: ActiveBatch): void {
   sendChannelMessage(batch, { end: true });
   activeBatches.splice(activeBatches.indexOf(batch), 1);
+}
+
+function finishBatch(batch: ActiveBatch): void {
+  endBatch(batch);
   batch.resolve();
+}
+
+// Rust returns errors as plain strings, so the promise rejects with one.
+function failBatch(kind: MediaKind, message: string): void {
+  const batch = activeBatches.find((activeBatch) => activeBatch.request.settings.kind === kind);
+  if (!batch) {
+    throw new Error(`No ${kind} batch is converting`);
+  }
+
+  endBatch(batch);
+  batch.reject(message);
 }
 
 // convert_files resolves once every file in its batch has finished, as in Rust.
@@ -167,13 +186,15 @@ function convertBatchAutomatically(batch: ActiveBatch): void {
   }
 }
 
-function startBatch(request: ConversionRequest, channel: Channel<ConversionEvent>, resolve: () => void): void {
+type BatchSettlers = Pick<ActiveBatch, "resolve" | "reject">;
+
+function startBatch(request: ConversionRequest, channel: Channel<ConversionEvent>, settlers: BatchSettlers): void {
   const batch: ActiveBatch = {
     request,
     channelId: channel.id,
     nextMessageIndex: 0,
     unfinishedFileIds: new Set(request.files.map((file) => file.fileId)),
-    resolve,
+    ...settlers,
   };
   activeBatches.push(batch);
 
@@ -185,10 +206,17 @@ function startBatch(request: ConversionRequest, channel: Channel<ConversionEvent
 function convertFiles(request: ConversionRequest, channel: Channel<ConversionEvent>): Promise<void> {
   backendLog.conversionRequests.push(request);
 
-  const batchFinished = new Promise<void>((resolve) => startBatch(request, channel, resolve));
+  const batchFinished = new Promise<void>((resolve, reject) => startBatch(request, channel, { resolve, reject }));
   return batchFinished;
 }
 
+function cancelUnfinishedFiles(batch: ActiveBatch): void {
+  for (const fileId of [...batch.unfinishedFileIds]) {
+    deliverEvent(batch, { type: "cancelled", fileId });
+  }
+}
+
+// Like Rust, cancelling only signals the batch; its files stop a moment later.
 function cancelConversion(batchId: string): void {
   backendLog.cancelledBatchIds.push(batchId);
   const batch = activeBatches.find((activeBatch) => activeBatch.request.batchId === batchId);
@@ -196,9 +224,7 @@ function cancelConversion(batchId: string): void {
     return;
   }
 
-  for (const fileId of [...batch.unfinishedFileIds]) {
-    deliverEvent(batch, { type: "cancelled", fileId });
-  }
+  setTimeout(() => cancelUnfinishedFiles(batch));
 }
 
 function findConvertingFile(fileName: string): { batch: ActiveBatch; fileId: string } {
@@ -255,6 +281,12 @@ const COMMAND_HANDLERS: Record<string, CommandHandler> = {
   reveal_output: (payload) => {
     backendLog.revealedOutputs.push(argumentsAs<{ path: string }>(payload).path);
   },
+  "plugin:window|destroy": () => {
+    backendLog.windowDestroys.push({ runningBatchCount: activeBatches.length });
+  },
+  "plugin:opener|open_url": (payload) => {
+    backendLog.openedUrls.push(argumentsAs<{ url: string }>(payload).url);
+  },
   "plugin:dialog|open": (payload) => openDialog(argumentsAs<{ options: OpenDialogOptions }>(payload).options),
   "plugin:store|load": () => STORE_RESOURCE_ID,
   "plugin:store|get": () => readStoredPreferences(),
@@ -290,6 +322,8 @@ const controls: MockBackendControls = {
   },
   emitDragEvent: (type, paths) => emit(DRAG_EVENT_NAMES[type], { paths, position: { x: 0, y: 0 } }),
   sendFileEvent,
+  failBatch,
+  requestWindowClose: () => emit(CLOSE_REQUESTED_EVENT, null),
   readLog: () => backendLog,
 };
 

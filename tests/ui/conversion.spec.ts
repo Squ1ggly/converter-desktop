@@ -125,3 +125,42 @@ test("Convert again converts every file a second time", async ({ page }) => {
   expect(secondRun?.settings.format).toBe("webp");
   expect(secondRun?.files.map((file) => file.path)).toEqual([BEACH_PHOTO, CITY_PHOTO]);
 });
+
+test("finished files show a Done badge", async ({ page }) => {
+  await launchWithFiles(page, [BEACH_PHOTO, HOLIDAY_VIDEO]);
+
+  await page.getByRole("button", { name: "Convert 2 files" }).click();
+
+  await expect(fileRow(page, "beach.png").getByText("Done", { exact: true })).toBeVisible();
+  await expect(fileRow(page, "holiday.mov").getByText("Done", { exact: true })).toBeVisible();
+});
+
+test("a batch that fails to run only fails its own files", async ({ page }) => {
+  const backend = await launchWithFiles(page, [BEACH_PHOTO, CITY_PHOTO, HOLIDAY_VIDEO], { conversionMode: "manual" });
+  await page.getByRole("button", { name: "Convert 3 files" }).click();
+  await backend.startFile("holiday.mov");
+  await backend.reportProgress("holiday.mov", 30);
+
+  await backend.failBatch("image", "The bundled FFmpeg is missing");
+
+  await expect(fileRow(page, "beach.png").getByRole("alert")).toHaveText("The bundled FFmpeg is missing");
+  await expect(fileRow(page, "city.jpg").getByRole("alert")).toHaveText("The bundled FFmpeg is missing");
+  await expect(fileRow(page, "holiday.mov")).toContainText("30%");
+  await expect(page.getByText("Converting 3 of 3")).toBeVisible();
+});
+
+test("Cancel still stops the other batch after one fails", async ({ page }) => {
+  const backend = await launchWithFiles(page, [BEACH_PHOTO, HOLIDAY_VIDEO], { conversionMode: "manual" });
+  await page.getByRole("button", { name: "Convert 2 files" }).click();
+  await backend.failBatch("image", "The bundled FFmpeg is missing");
+  await expect(fileRow(page, "beach.png")).toContainText("Failed");
+
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await expect(fileRow(page, "holiday.mov")).toContainText("Cancelled");
+  const { conversionRequests, cancelledBatchIds } = await backend.readLog();
+  const videoBatchIds = conversionRequests
+    .filter((request) => request.settings.kind === "video")
+    .map((request) => request.batchId);
+  expect(cancelledBatchIds).toEqual(videoBatchIds);
+});
