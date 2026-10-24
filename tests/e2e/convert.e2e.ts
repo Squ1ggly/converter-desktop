@@ -48,7 +48,7 @@ describe("Converter", () => {
 
   before(async () => {
     sampleMedia = await createSampleMedia();
-    await expect($("*=Drop images or videos")).toBeDisplayed();
+    await expect($("div*=Drop images or videos")).toBeDisplayed();
   });
 
   afterEach(async () => {
@@ -62,7 +62,7 @@ describe("Converter", () => {
   it("converts an image and a video next to the originals", async () => {
     await dropFiles([sampleMedia.photoPath, sampleMedia.videoPath, sampleMedia.textPath]);
     await expect($("h2=2 files")).toBeDisplayed();
-    await expect($("*=Skipped 1 unsupported file")).toBeDisplayed();
+    await expect($("div*=Skipped 1 unsupported file")).toBeDisplayed();
 
     await $("button=WebP").click();
     await $("button*=Convert 2 files").click();
@@ -82,7 +82,7 @@ describe("Converter", () => {
     await $("button*=Convert 1 file").click();
     await expect($("h2=0 files converted")).toBeDisplayed({ wait: CONVERSION_TIMEOUT_MS });
 
-    await expect($("*=Failed")).toBeDisplayed();
+    await expect($("span*=Failed")).toBeDisplayed();
     await expect($('[role="alert"]')).toBeDisplayed();
     const folderContents = await readdir(sampleMedia.folder);
     const brokenOutputs = folderContents.filter((fileName) => fileName.startsWith("broken ("));

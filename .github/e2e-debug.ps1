@@ -13,11 +13,17 @@ Get-ChildItem env: | Where-Object Name -like "WEBVIEW2*" | Format-List
 Write-Host "== Session"
 whoami
 Get-Process -Id $PID | Select-Object SessionId
+$identity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+Write-Host "Elevated=$($identity.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))"
+whoami /groups | Select-String "Mandatory Label"
+Write-Host "== WebView2 policy"
+Get-ItemProperty "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" -ErrorAction SilentlyContinue | Format-List
 
 function Show-Processes($label) {
   Write-Host "== Processes: $label"
   Get-CimInstance Win32_Process | Where-Object { $_.Name -in @("converter.exe", "msedgewebview2.exe", "msedgedriver.exe") } |
-    ForEach-Object { "{0} {1} parent={2}: {3}" -f $_.Name, $_.ProcessId, $_.ParentProcessId, $_.CommandLine } | Write-Host
+    ForEach-Object { "{0} {1} parent={2}: {3}" -f $_.Name, $_.ProcessId, $_.ParentProcessId, $_.CommandLine } | Out-File -Append -Width 4000 "$out\processes.txt"
+  Get-CimInstance Win32_Process -Filter "name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -notmatch "--type=" } | ForEach-Object { $_.CommandLine -split " --" } | Write-Host
 }
 
 Write-Host "== Launch the app directly"
@@ -44,7 +50,7 @@ Start-Sleep -Seconds 20
 Show-Processes "during session"
 Write-Host "-- user data folders"
 Get-ChildItem -Recurse -Depth 2 "$env:LOCALAPPDATA\com.squ1ggly.converter" -ErrorAction SilentlyContinue | Select-Object FullName | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
-Get-ChildItem -Recurse -Filter DevToolsActivePort "$env:LOCALAPPDATA", "$env:TEMP" -ErrorAction SilentlyContinue | Select-Object FullName | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
+Get-ChildItem -Recurse -Filter DevToolsActivePort "$env:LOCALAPPDATA", "$env:TEMP", "C:\Windows\SystemTemp" -ErrorAction SilentlyContinue | Select-Object FullName | Format-Table -AutoSize | Out-String -Width 300 | Write-Host
 Receive-Job $job -Wait | Write-Host
 Show-Processes "after session"
 Stop-Process -Id $driver.Id -Force -ErrorAction SilentlyContinue
