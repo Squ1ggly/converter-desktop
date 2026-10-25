@@ -388,6 +388,7 @@ async fn every_video_output_is_playable() {
                 frame_rate: None,
             },
             ffmpeg: &ffmpeg,
+            scratch_root: directory.path(),
             cancellation: &CancellationToken::new(),
         };
 
@@ -451,6 +452,7 @@ async fn convert_quick_video(
             frame_rate: None,
         },
         ffmpeg,
+        scratch_root: output_path.parent().unwrap(),
         cancellation: &CancellationToken::new(),
     };
     let conversion_result = convert_video(conversion, |_| {}).await;
@@ -491,10 +493,20 @@ fn describe_video(ffmpeg: &Ffmpeg, path: &Path) -> (u32, u32, f32) {
 }
 
 async fn convert_test_clip(source: &str, options: VideoOptions) -> (u32, u32, f32) {
+    convert_test_clip_to(source, VideoFormat::Mp4, options).await
+}
+
+async fn convert_test_clip_to(
+    source: &str,
+    format: VideoFormat,
+    options: VideoOptions,
+) -> (u32, u32, f32) {
     let ffmpeg = Ffmpeg::from_downloaded_binary();
     let directory = tempfile::tempdir().unwrap();
     let input_path = directory.path().join("source.mp4");
-    let output_path = directory.path().join("converted.mp4");
+    let output_path = directory
+        .path()
+        .join(format!("converted.{}", format.extension()));
     run_ffmpeg(
         &ffmpeg,
         &["-f", "lavfi", "-i", source, &input_path.to_string_lossy()],
@@ -504,9 +516,10 @@ async fn convert_test_clip(source: &str, options: VideoOptions) -> (u32, u32, f3
     let conversion = VideoConversion {
         input_path: &input_path,
         output_path: &output_path,
-        format: VideoFormat::Mp4,
+        format,
         options,
         ffmpeg: &ffmpeg,
+        scratch_root: directory.path(),
         cancellation: &CancellationToken::new(),
     };
     convert_video(conversion, |_| {})
@@ -543,6 +556,23 @@ async fn limits_never_enlarge_or_speed_up_video() {
 
     assert_eq!((width, height), (480, 240));
     assert_eq!(frame_rate, 24.0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn gif_output_is_capped_at_480_pixels_on_the_shorter_side() {
+    let options = VideoOptions {
+        quality: VideoQuality::Balanced,
+        max_height: None,
+        frame_rate: None,
+    };
+    let (width, height, _frame_rate) = convert_test_clip_to(
+        "testsrc=duration=0.5:size=1280x720:rate=10",
+        VideoFormat::Gif,
+        options,
+    )
+    .await;
+
+    assert_eq!((width, height), (853, 480));
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -213,6 +213,7 @@ async fn run_conversion(
                 format,
                 options,
                 ffmpeg: &context.ffmpeg,
+                scratch_root: &context.scratch_root,
                 cancellation: &context.cancellation,
             };
             let report_progress = |percent| {

@@ -38,7 +38,8 @@ on every launch.
 
 Videos are converted by one FFmpeg run each. `video_conversion.rs` builds the arguments: the codec
 and quality preset per container, a scale filter that only shrinks, the frame rate, and a
-per-clip palette for GIF. `ffmpeg.rs` runs the process, reads progress from `-progress pipe:1`,
+per-clip palette for GIF. GIF takes two FFmpeg runs: the first writes the palette to the scratch
+folder, the second applies it. Doing both in one run makes FFmpeg hold every frame in memory. `ffmpeg.rs` runs the process, reads progress from `-progress pipe:1`,
 and picks the most relevant stderr line as the error message.
 
 ## Module map
