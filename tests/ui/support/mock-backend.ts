@@ -140,15 +140,23 @@ function finishBatch(batch: ActiveBatch): void {
   batch.resolve();
 }
 
-// Rust returns errors as plain strings, so the promise rejects with one.
-function failBatch(kind: MediaKind, message: string): void {
+function findBatch(kind: MediaKind): ActiveBatch {
   const batch = activeBatches.find((activeBatch) => activeBatch.request.settings.kind === kind);
   if (!batch) {
     throw new Error(`No ${kind} batch is converting`);
   }
+  return batch;
+}
 
+// Rust returns errors as plain strings, so the promise rejects with one.
+function failBatch(kind: MediaKind, message: string): void {
+  const batch = findBatch(kind);
   endBatch(batch);
   batch.reject(message);
+}
+
+function endBatchEarly(kind: MediaKind): void {
+  finishBatch(findBatch(kind));
 }
 
 // convert_files resolves once every file in its batch has finished, as in Rust.
@@ -329,6 +337,7 @@ const controls: MockBackendControls = {
   emitDragEvent: (type, paths) => emit(DRAG_EVENT_NAMES[type], { paths, position: { x: 0, y: 0 } }),
   sendFileEvent,
   failBatch,
+  endBatchEarly,
   requestWindowClose: () => emit(CLOSE_REQUESTED_EVENT, null),
   readLog: () => backendLog,
 };

@@ -4,6 +4,8 @@ import type { Preferences } from "$lib/preferences";
 import type { FileQueue } from "$lib/queue.svelte";
 import { buildConversionRequests } from "$lib/requests";
 
+const MISSING_RESULT_MESSAGE = "The conversion stopped before this file finished.";
+
 // Starts, cancels and waits for a conversion of every file in the queue.
 export class ConversionRun {
   isCancelling = $state(false);
@@ -41,10 +43,12 @@ export class ConversionRun {
 
   // Images and videos run as separate batches; a failure only affects its own.
   async #runBatch(request: ConversionRequest): Promise<void> {
+    const fileIds = request.files.map((file) => file.fileId);
     try {
       await convertFiles(request, (event) => this.#queue.applyEvent(event));
+      // A file the backend never reported on would otherwise wait forever.
+      this.#queue.markUnfinishedAsFailed(fileIds, MISSING_RESULT_MESSAGE);
     } catch (error) {
-      const fileIds = request.files.map((file) => file.fileId);
       this.#queue.markUnfinishedAsFailed(fileIds, errorMessageOf(error));
     } finally {
       this.#activeBatchIds = this.#activeBatchIds.filter((batchId) => batchId !== request.batchId);

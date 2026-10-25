@@ -78,6 +78,10 @@ export class MockBackend {
     );
   }
 
+  async endBatchEarly(kind: MediaKind): Promise<void> {
+    await this.#page.evaluate((batchKind) => window.converterMockBackend.endBatchEarly(batchKind), kind);
+  }
+
   // Like clicking the window's close button.
   async requestWindowClose(): Promise<void> {
     await this.#page.evaluate(() => window.converterMockBackend.requestWindowClose());

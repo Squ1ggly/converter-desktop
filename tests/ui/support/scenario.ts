@@ -50,6 +50,8 @@ export interface MockBackendControls {
   sendFileEvent(fileName: string, event: FileConversionEvent): void;
   // Makes that kind's convert_files call fail, as when the Rust command returns an error.
   failBatch(kind: MediaKind, message: string): void;
+  // Makes that kind's convert_files call return before every file has a result.
+  endBatchEarly(kind: MediaKind): void;
   requestWindowClose(): Promise<void>;
   readLog(): BackendLog;
 }

@@ -164,3 +164,17 @@ test("Cancel still stops the other batch after one fails", async ({ page }) => {
     .map((request) => request.batchId);
   expect(cancelledBatchIds).toEqual(videoBatchIds);
 });
+
+test("files a batch never reported on are marked failed when it ends", async ({ page }) => {
+  const backend = await launchWithFiles(page, [BEACH_PHOTO, CITY_PHOTO], { conversionMode: "manual" });
+  await page.getByRole("button", { name: "Convert 2 files" }).click();
+  await backend.completeFile("beach.png", BEACH_OUTPUT);
+  await backend.startFile("city.jpg");
+
+  await backend.endBatchEarly("image");
+
+  await expect(fileRow(page, "city.jpg")).toContainText("Failed");
+  await expect(fileRow(page, "city.jpg").getByRole("alert")).toHaveText("The conversion stopped before this file finished.");
+  await expect(fileRow(page, "beach.png")).toContainText("Done");
+  await expect(page.getByRole("button", { name: "Convert again" })).toBeVisible();
+});
