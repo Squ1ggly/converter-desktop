@@ -16,6 +16,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       issues: write
       pull-requests: write
@@ -25,6 +26,15 @@ jobs:
     steps:
       - id: release
         uses: googleapis/release-please-action@v5
+
+      # GitHub doesn't run workflows for PRs opened by Actions, so start CI on the
+      # release PR here. Its checks then show on the PR like any other.
+      - name: Run CI on the release PR
+        if: steps.release.outputs.prs_created == 'true' && steps.release.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+        run: gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$RELEASE_BRANCH"
 
   build:
     needs: release-please

@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Started by the Release workflow for release PRs.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,6 +15,15 @@ permissions:
   contents: read
 
 jobs:
+  workflows:
+    name: Lint workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+
   check:
     name: Check (${{ matrix.os }})
     strategy:
@@ -110,8 +121,9 @@ jobs:
       # msedgedriver must match the installed WebView2 version.
       - name: Install a matching Edge WebDriver
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          cargo install --git https://github.com/chippers/msedgedriver-tool
+          cargo install --git https://github.com/chippers/msedgedriver-tool --rev 8c4b34f51b45f5cf08013366d703de464ab871d1 --locked
           & "$HOME/.cargo/bin/msedgedriver-tool.exe"
           $PWD.Path >> $env:GITHUB_PATH
 
@@ -119,6 +131,7 @@ jobs:
       # app runs elevated, as it does on GitHub runners, so the debugging port is set by policy.
       - name: Allow WebView2 remote debugging
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
           $key = "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments"
           New-Item -Path $key -Force | Out-Null
