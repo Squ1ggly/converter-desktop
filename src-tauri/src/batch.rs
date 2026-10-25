@@ -142,16 +142,19 @@ async fn convert_queued_file(job: FileJob, parallel_limit: Arc<Semaphore>, conte
 
 // Removes the partial output if the conversion fails or is cancelled.
 async fn convert_one_file(job: &FileJob, context: &BatchContext) -> ConversionResult<PathBuf> {
-    let input_path = resolve_absolute_path(&job.file.path)?;
+    let input_path =
+        resolve_absolute_path(&job.file.path).map_err(|error| error.about_input(&job.file.path))?;
     let output_directory = resolve_output_directory(&input_path, job.output_directory.as_deref())?;
     let output_path = reserve_output_path(
         &input_path,
         &output_directory,
         job.settings.output_extension(),
-    )?;
+    )
+    .map_err(|error| error.about_output_folder(&output_directory))?;
 
     let conversion_result = run_conversion(job, &input_path, &output_path, context)
         .await
+        .map_err(|error| error.about_conversion(&input_path, &output_directory))
         .and_then(|()| ensure_output_was_written(&output_path));
     if let Err(error) = conversion_result {
         let _ = std::fs::remove_file(&output_path);
@@ -187,7 +190,9 @@ fn resolve_output_directory(
     chosen_directory: Option<&Path>,
 ) -> ConversionResult<PathBuf> {
     if let Some(chosen_directory) = chosen_directory {
-        return resolve_absolute_path(chosen_directory);
+        let resolved_directory = resolve_absolute_path(chosen_directory)
+            .map_err(|error| error.about_output_folder(chosen_directory))?;
+        return Ok(resolved_directory);
     }
 
     let source_directory = input_path.parent().map(Path::to_path_buf).ok_or_else(|| {

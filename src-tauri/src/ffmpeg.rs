@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -77,6 +77,7 @@ impl Ffmpeg {
         cancellation: &CancellationToken,
         on_progress: impl FnMut(f32),
     ) -> ConversionResult<()> {
+        let path_arguments = absolute_path_arguments(&arguments);
         let mut command = Command::new(&self.binary_path);
         command
             .args([
@@ -124,7 +125,8 @@ impl Ffmpeg {
         }
 
         let stderr_lines = stderr_task.await.unwrap_or_default();
-        let error_message = extract_error_message(&stderr_lines);
+        log::warn!("FFmpeg failed:\n{}", stderr_lines.join("\n"));
+        let error_message = extract_error_message(&stderr_lines, &path_arguments);
         Err(ConversionError::Ffmpeg(error_message))
     }
 }
@@ -229,24 +231,40 @@ fn parse_progress_percent(line: &str, total_microseconds: u64) -> Option<f32> {
     Some(clamped_percent)
 }
 
-fn extract_error_message(stderr_lines: &[String]) -> String {
-    let explicit_error_line = stderr_lines.iter().rev().find(|line| {
+// FFmpeg's own bookkeeping, repeated after every real error.
+const NOISE_LINE_MARKERS: [&str; 2] = [
+    "Terminating thread with return code",
+    "Task finished with error code",
+];
+
+fn extract_error_message(stderr_lines: &[String], path_arguments: &[String]) -> String {
+    let cleaned_lines: Vec<String> = stderr_lines
+        .iter()
+        .filter(|line| {
+            !NOISE_LINE_MARKERS
+                .iter()
+                .any(|marker| line.contains(marker))
+        })
+        .map(|line| clean_log_line(line, path_arguments))
+        .filter(|line| !line.is_empty())
+        .collect();
+
+    let explicit_error_line = cleaned_lines.iter().rev().find(|line| {
         line.contains("Error")
             || line.contains("Invalid")
             || line.contains("No such")
             || line.contains("not supported")
     });
-
     if let Some(error_line) = explicit_error_line {
-        return error_line.trim().to_string();
+        return error_line.clone();
     }
 
-    let last_lines: Vec<&str> = stderr_lines
+    let last_lines: Vec<&str> = cleaned_lines
         .iter()
         .rev()
         .take(2)
         .rev()
-        .map(|line| line.trim())
+        .map(String::as_str)
         .collect();
     let fallback_message = if last_lines.is_empty() {
         "FFmpeg could not convert this file".to_string()
@@ -254,6 +272,37 @@ fn extract_error_message(stderr_lines: &[String]) -> String {
         last_lines.join(" ")
     };
     fallback_message
+}
+
+fn absolute_path_arguments(arguments: &[OsString]) -> Vec<String> {
+    let path_arguments = arguments
+        .iter()
+        .filter(|argument| Path::new(argument).is_absolute())
+        .filter_map(|argument| argument.to_str().map(str::to_string))
+        .collect();
+    path_arguments
+}
+
+// Drops "[out#0/image2 @ 0x6000038c4000] " style prefixes, and shortens the
+// full paths FFmpeg was given to their file names.
+fn clean_log_line(line: &str, path_arguments: &[String]) -> String {
+    let mut message = line.trim();
+    while message.starts_with('[') {
+        let Some(prefix_end) = message.find("] ") else {
+            break;
+        };
+        message = message[prefix_end + 2..].trim_start();
+    }
+
+    let mut cleaned_line = message.to_string();
+    for path_argument in path_arguments {
+        let file_name = Path::new(path_argument)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        cleaned_line = cleaned_line.replace(path_argument.as_str(), &file_name);
+    }
+    cleaned_line
 }
 
 #[cfg(test)]
@@ -296,8 +345,25 @@ mod tests {
             "Exiting".to_string(),
         ];
         assert_eq!(
-            extract_error_message(&lines),
+            extract_error_message(&lines, &[]),
             "Error opening input file broken.mov."
+        );
+    }
+
+    #[test]
+    fn error_lines_lose_log_prefixes_addresses_and_folders() {
+        let output_path = "/Users/sam/Pictures/Week 3/photo.webp".to_string();
+        let lines = vec![
+            "[out#0/image2 @ 0x6000038c4000] [enc:png @ 0x1319] Error opening output /Users/sam/Pictures/Week 3/photo.webp: Permission denied".to_string(),
+            "[vost#0:0/png @ 0x1319051e0] Task finished with error code: -22 (Invalid argument)".to_string(),
+            "[vf#0:0 @ 0x13200a600] Terminating thread with return code -22 (Invalid argument)".to_string(),
+        ];
+
+        let message = extract_error_message(&lines, &[output_path]);
+
+        assert_eq!(
+            message,
+            "Error opening output photo.webp: Permission denied"
         );
     }
 }

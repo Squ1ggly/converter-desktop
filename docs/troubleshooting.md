@@ -15,8 +15,14 @@ written to the [log](settings-and-data.md#where-files-are-kept).
 | This image is too large to convert at that size. Choose a smaller size. | **Scale** or **Fit** would make the image over 100 megapixels | Choose a smaller size |
 | Converting produced an empty file | The encoder finished without writing anything. The empty file is removed. | Try another output format, and report it with the log |
 | Too many files with this name already exist | Every name from `name.ext` to `name (10000).ext` is taken in the save folder | Choose another save folder, or tidy the folder |
-| A line from FFmpeg, for example "Error opening input file" | FFmpeg couldn't read or convert the file. The message is the most relevant line from its output. | Check the file opens in another app. Try another output format. |
-| An operating system error, such as permission denied or no such file | The save folder is read-only, no longer exists, or the original was moved | Choose another save folder under **Save to**, or add the file again |
+| A line from FFmpeg, for example "Error opening input file clip.mp4." | FFmpeg couldn't read or convert the file. The message is the most relevant line from its output, with file names instead of full paths. The full output is in the log. | Check the file opens in another app. Try another output format. |
+| &lt;file&gt; is no longer there. It may have been moved or deleted. | The original was moved, renamed or deleted after it was added | Add the file again |
+| Can't read &lt;file&gt;. Check the file's permissions. | Your account isn't allowed to open the original | Change the file's permissions, or copy it somewhere you can read it |
+| Can't write to &lt;folder&gt;. Check the folder's permissions. | The save folder is read-only for your account, or on a read-only disk | Choose another folder under **Save to** |
+| The folder &lt;folder&gt; no longer exists | The save folder was moved or deleted | Choose another folder under **Save to** |
+| There isn't enough space to save in &lt;folder&gt; | The disk is full | Free up space, or choose a folder on another disk |
+| Only files with a full path can be converted | The app was given a path it doesn't accept. This shouldn't happen. | Add the file again, and report it with the log |
+| The conversion stopped unexpectedly. The log has the details. | A bug in the app | Report it with the log |
 
 ## Other problems
 

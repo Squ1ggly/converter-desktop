@@ -172,3 +172,50 @@ async fn paths_through_a_symlinked_folder_are_resolved_first() {
     let output_path = PathBuf::from(finished[0]["outputPath"].as_str().unwrap());
     assert_eq!(output_path, real_folder.join("photo.jpg"));
 }
+
+fn only_failure_message(events: &[Value]) -> String {
+    let finished = final_events(events);
+    assert_eq!(event_types(&finished), ["failed"], "events: {events:?}");
+    let message = finished[0]["message"].as_str().unwrap().to_string();
+    message
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_that_has_gone_is_reported_by_name() {
+    let (_folder, folder_path) = resolved_temp_folder();
+
+    let events = TestBatch::new(
+        vec![folder_path.join("gone.png")],
+        image_settings(ImageFormat::Jpg),
+    )
+    .run()
+    .await;
+
+    assert_eq!(
+        only_failure_message(&events),
+        "gone.png is no longer there. It may have been moved or deleted."
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_read_only_folder_is_reported_by_name() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (_folder, folder_path) = resolved_temp_folder();
+    let photo_path = folder_path.join("photo.png");
+    write_sample_png(&photo_path);
+    let read_only_folder = folder_path.join("Read only");
+    std::fs::create_dir(&read_only_folder).unwrap();
+    std::fs::set_permissions(&read_only_folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    let mut batch = TestBatch::new(vec![photo_path], image_settings(ImageFormat::Jpg));
+    batch.output_directory = Some(read_only_folder.clone());
+    let events = batch.run().await;
+
+    std::fs::set_permissions(&read_only_folder, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(
+        only_failure_message(&events),
+        "Can't write to Read only. Check the folder's permissions."
+    );
+}
