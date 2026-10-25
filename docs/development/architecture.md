@@ -48,9 +48,11 @@ src/
   App.svelte                 Wires the queue, settings, drag and drop, and shortcuts together
   lib/backend.ts             Typed wrappers for the Rust commands
   lib/queue.svelte.ts        The file list and each file's conversion state
+  lib/conversion-run.svelte.ts  Starts, cancels and waits for a conversion
+  lib/shortcuts.ts           Keyboard shortcuts and their key labels per OS
   lib/requests.ts            Builds one conversion request per kind from the list and settings
   lib/preferences.svelte.ts  Remembered settings, stored with the Tauri store plugin
-  lib/formatting.ts          Sizes, plurals, shortcut keys and the reveal label per OS
+  lib/formatting.ts          Sizes, plurals and the reveal label per OS
   lib/components/            Toolbar, file list, settings panel, format pickers
   lib/components/ui/         shadcn-svelte components
 src-tauri/src/

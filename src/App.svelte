@@ -17,34 +17,31 @@
   import SettingsView from "$lib/components/SettingsView.svelte";
   import Toolbar from "$lib/components/Toolbar.svelte";
   import {
-    cancelConversion,
-    convertFiles,
     getCatalog,
     inspectPaths,
     openOutput,
     revealOutput,
     type ConversionCatalog,
-    type ConversionRequest,
     type FormatOption,
   } from "$lib/backend";
-  import { isPrimaryModifierPressed, pluralise, revealInFolderLabel } from "$lib/formatting";
+  import { ConversionRun } from "$lib/conversion-run.svelte";
+  import { errorMessageOf } from "$lib/errors";
+  import { pluralise, revealInFolderLabel } from "$lib/formatting";
   import { PreferenceStore } from "$lib/preferences.svelte";
   import { FileQueue } from "$lib/queue.svelte";
-  import { buildConversionRequests } from "$lib/requests";
+  import { shortcutFor, type Shortcut } from "$lib/shortcuts";
   import type { AppView } from "$lib/views";
 
   const MAX_NAMES_IN_TOAST = 3;
 
   const queue = new FileQueue();
   const preferenceStore = new PreferenceStore();
+  const conversionRun = new ConversionRun(queue);
 
   let catalog = $state<ConversionCatalog | null>(null);
   let startupError = $state<string | null>(null);
   let hasLoadedPreferences = $state(false);
   let isDraggingFiles = $state(false);
-  let activeBatchIds = $state<string[]>([]);
-  let isCancelling = $state(false);
-  let activeRun: Promise<void> = Promise.resolve();
   let view = $state<AppView>("converter");
   let isQuitDialogOpen = $state(false);
 
@@ -56,11 +53,6 @@
   function labelFor(options: FormatOption[] | undefined, formatId: string): string {
     const label = options?.find((option) => option.id === formatId)?.label ?? formatId.toUpperCase();
     return label;
-  }
-
-  function errorMessageOf(error: unknown): string {
-    const message = error instanceof Error ? error.message : String(error);
-    return message;
   }
 
   // A saved format may not exist on this machine (HEIC output is macOS only).
@@ -146,35 +138,7 @@
   }
 
   async function startConversion(): Promise<void> {
-    if (queue.isEmpty || queue.isConverting) {
-      return;
-    }
-
-    queue.prepareForRun();
-    const requests = buildConversionRequests(queue.items, $state.snapshot(preferenceStore.values));
-    activeBatchIds = requests.map((request) => request.batchId);
-
-    activeRun = Promise.all(requests.map(runBatch)).then(() => {
-      isCancelling = false;
-    });
-    await activeRun;
-  }
-
-  // Images and videos run as separate batches; a failure only affects its own.
-  async function runBatch(request: ConversionRequest): Promise<void> {
-    try {
-      await convertFiles(request, (event) => queue.applyEvent(event));
-    } catch (error) {
-      const fileIds = request.files.map((file) => file.fileId);
-      queue.markUnfinishedAsFailed(fileIds, errorMessageOf(error));
-    } finally {
-      activeBatchIds = activeBatchIds.filter((batchId) => batchId !== request.batchId);
-    }
-  }
-
-  async function cancelActiveConversion(): Promise<void> {
-    isCancelling = true;
-    await Promise.all(activeBatchIds.map((batchId) => cancelConversion(batchId)));
+    await conversionRun.start($state.snapshot(preferenceStore.values));
   }
 
   async function runFileAction(action: (path: string) => Promise<void>, path: string): Promise<void> {
@@ -211,31 +175,20 @@
     void startConversion();
   }
 
-  // Shortcut labels per OS live in shortcutKeys (formatting.ts).
-  function shortcutActionFor(event: KeyboardEvent): (() => void) | null {
-    if (event.key === "F1") {
-      return () => toggleView("help");
-    }
-    if (!isPrimaryModifierPressed(event, platform)) {
-      return null;
-    }
-
-    const actionsByKey: Record<string, () => void> = {
-      o: () => void chooseFiles(),
-      enter: convertFromAnyView,
-      ",": () => toggleView("settings"),
-    };
-    const action = actionsByKey[event.key.toLowerCase()] ?? null;
-    return action;
-  }
+  const SHORTCUT_ACTIONS: Record<Shortcut, () => void> = {
+    open: () => void chooseFiles(),
+    convert: convertFromAnyView,
+    settings: () => toggleView("settings"),
+    help: () => toggleView("help"),
+  };
 
   function handleKeydown(event: KeyboardEvent): void {
-    const action = shortcutActionFor(event);
-    if (!action) {
+    const shortcut = shortcutFor(event, platform);
+    if (!shortcut) {
       return;
     }
     event.preventDefault();
-    action();
+    SHORTCUT_ACTIONS[shortcut]();
   }
 
   // Closing mid-conversion asks first, so nothing is left half-written.
@@ -248,8 +201,8 @@
   }
 
   async function quitAfterCancelling(): Promise<void> {
-    await cancelActiveConversion();
-    await activeRun;
+    await conversionRun.cancel();
+    await conversionRun.waitUntilFinished();
     await getCurrentWindow().destroy();
   }
 
@@ -324,11 +277,11 @@
             fileCount={queue.items.length}
             finishedCount={queue.summary.finishedCount}
             isConverting={queue.isConverting}
-            {isCancelling}
+            isCancelling={conversionRun.isCancelling}
             isRerun={queue.hasFinishedRun}
             {platform}
             onConvert={startConversion}
-            onCancel={cancelActiveConversion}
+            onCancel={() => conversionRun.cancel()}
           />
         </div>
       {/if}

@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as Kbd from "$lib/components/ui/kbd/index.js";
-  import { shortcutKeys, type Shortcut } from "$lib/formatting";
+  import { shortcutKeys, type Shortcut } from "$lib/shortcuts";
 
   interface Props {
     shortcut: Shortcut;
