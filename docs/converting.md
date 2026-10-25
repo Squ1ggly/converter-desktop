@@ -23,6 +23,12 @@ Click **Cancel**. The button shows "Cancelling" until every file has stopped.
 - Video conversions in progress are stopped, and their partly written files are deleted.
 - An image that is already being converted may still finish.
 
+## Closing while converting
+
+Closing the window during a conversion asks "Quit while converting?" first. **Keep converting**
+carries on. **Quit** shows "Quitting" while it cancels the files still converting, then closes the
+window. Their unfinished output is removed.
+
 ## Results
 
 When every file has finished, the heading shows how many converted, plus how many failed or were

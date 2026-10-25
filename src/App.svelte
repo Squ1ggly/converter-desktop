@@ -47,6 +47,7 @@
   let isDraggingFiles = $state(false);
   let view = $state<AppView>("converter");
   let isQuitDialogOpen = $state(false);
+  let isQuitting = $state(false);
 
   const platform = $derived(catalog?.platform ?? UNKNOWN_PLATFORM);
   const revealLabel = $derived(revealInFolderLabel(platform));
@@ -271,9 +272,29 @@
   }
 
   async function quitAfterCancelling(): Promise<void> {
-    await conversionRun.cancel();
-    await conversionRun.waitUntilFinished();
-    await getCurrentWindow().destroy();
+    if (isQuitting) {
+      return;
+    }
+
+    isQuitting = true;
+    try {
+      await conversionRun.cancel();
+      await conversionRun.waitUntilFinished();
+    } catch (error) {
+      // The window still closes. The error stays visible if closing fails too.
+      showError("Couldn't cancel the conversion", error);
+    } finally {
+      await destroyWindow();
+    }
+  }
+
+  async function destroyWindow(): Promise<void> {
+    try {
+      await getCurrentWindow().destroy();
+    } catch (error) {
+      isQuitting = false;
+      showError("Couldn't quit", error);
+    }
   }
 
   onMount(() => {
@@ -369,4 +390,4 @@
   <DropOverlay />
 {/if}
 
-<QuitDialog bind:open={isQuitDialogOpen} onQuit={quitAfterCancelling} />
+<QuitDialog bind:open={isQuitDialogOpen} {isQuitting} onQuit={quitAfterCancelling} />

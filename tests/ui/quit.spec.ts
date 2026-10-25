@@ -82,3 +82,45 @@ test("shortcuts do nothing while the quit dialog is open", async ({ page }) => {
   const { dialogs } = await backend.readLog();
   expect(dialogs).toEqual([]);
 });
+
+test("after Quit the dialog shows Quitting, and clicking twice quits once", async ({ page }) => {
+  const backend = await startConvertingTwoBatches(page);
+  await backend.requestWindowClose();
+
+  await page.getByRole("button", { name: "Quit", exact: true }).dblclick();
+
+  const quitDialog = page.getByRole("alertdialog");
+  await expect(quitDialog.getByRole("button", { name: "Quitting" })).toBeDisabled();
+  await expect(quitDialog.getByRole("button", { name: "Keep converting" })).toBeDisabled();
+  await expect.poll(async () => (await backend.readLog()).windowDestroys).toHaveLength(1);
+  const { cancelledBatchIds } = await backend.readLog();
+  expect(cancelledBatchIds).toHaveLength(2);
+});
+
+test("Quit still closes the window if cancelling fails", async ({ page }) => {
+  const backend = await launchWithFiles(page, [BEACH_PHOTO], {
+    conversionMode: "manual",
+    failingCommands: { cancel_conversion: "The conversion has already ended" },
+  });
+  await page.getByRole("button", { name: "Convert 1 file" }).click();
+  await backend.requestWindowClose();
+
+  await page.getByRole("button", { name: "Quit", exact: true }).click();
+
+  await expect.poll(async () => (await backend.readLog()).windowDestroys).toHaveLength(1);
+});
+
+test("a window that can't close says so and offers Quit again", async ({ page }) => {
+  await launchWithFiles(page, [BEACH_PHOTO], {
+    conversionMode: "manual",
+    failingCommands: { "plugin:window|destroy": "The window is busy" },
+  });
+  await page.getByRole("button", { name: "Convert 1 file" }).click();
+  await page.evaluate(() => window.converterMockBackend.requestWindowClose());
+
+  await page.getByRole("button", { name: "Quit", exact: true }).click();
+
+  const toast = page.getByRole("listitem").filter({ hasText: "Couldn't quit" });
+  await expect(toast).toContainText("The window is busy");
+  await expect(page.getByRole("button", { name: "Quit", exact: true })).toBeEnabled();
+});
