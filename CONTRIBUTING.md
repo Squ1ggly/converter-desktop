@@ -1,10 +1,22 @@
 # Contributing
 
+Read [AGENTS.md](AGENTS.md) for the coding rules and the checks to run before a pull request.
+Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+
+## Reporting bugs
+
+Open an issue with the [bug report form](https://github.com/Squ1ggly/converter-desktop/issues/new/choose).
+It asks for your OS, the app version and the app's logs. Report security problems privately
+instead, as described in [SECURITY.md](SECURITY.md).
+
 ## Commit messages
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org): `type(scope): summary`,
-for example `fix(video): keep the audio track when changing the frame rate`. When a PR is squash
-merged, its title becomes the commit message, so the title has to follow the same format.
+for example `fix(video): keep the audio track when changing the frame rate`. Keep the subject
+short and on one line.
+
+Pull requests are squash merged, and the PR title becomes the commit subject on `main`, so the
+title has to follow the same format.
 
 | Type | Use for | In the changelog |
 |---|---|---|
@@ -16,9 +28,10 @@ merged, its title becomes the commit message, so the title has to follow the sam
 | `test` | Adding or fixing tests | No |
 | `build` | Dependencies, build scripts, the bundled FFmpeg | No |
 | `ci` | GitHub Actions workflows | No |
+| `style` | Formatting only | No |
 | `chore` | Anything else | No |
 
-Mark a breaking change with `!` after the type, for example `feat!: drop macOS 10.15 support`.
+Mark a breaking change with `!` after the type, for example `feat!: rename the settings file`.
 Before 1.0 it bumps the minor version.
 
 ## Releases
@@ -56,7 +69,7 @@ There are three suites.
 
 | Suite | Command | What it covers |
 |---|---|---|
-| Rust | `cargo test --manifest-path src-tauri/Cargo.toml` | Every conversion, run through the downloaded FFmpeg |
+| Rust | `cargo test --manifest-path src-tauri/Cargo.toml` | Unit tests, and every conversion run through the downloaded FFmpeg |
 | UI | `pnpm test:ui` | The Svelte UI in WebKit and Chromium, with the backend mocked |
 | End-to-end | `pnpm test:e2e` | The built app converting real files, Linux and Windows only |
 

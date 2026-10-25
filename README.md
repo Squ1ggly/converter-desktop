@@ -18,9 +18,12 @@ FFmpeg is bundled, and no files are uploaded.
 
 ## Install
 
-Download the installer for your platform from the
-[releases page](https://github.com/Squ1ggly/converter-desktop/releases). The builds are unsigned;
-[Installing](docs/installing.md) explains how to open them on each platform.
+Installers will be attached to each
+[GitHub release](https://github.com/Squ1ggly/converter-desktop/releases). No release has been
+published yet, so for now build the app from source as described under [Development](#development).
+
+The builds are unsigned. [Installing](docs/installing.md) explains how to open them on each
+platform.
 
 ## Development
 
@@ -42,13 +45,12 @@ pnpm dev            # runs the app with hot reload
 - [Testing](CONTRIBUTING.md#testing)
 - [Releasing](docs/development/releasing.md)
 - [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
 
 ## Licence
 
-The app is MIT-licensed; see [LICENSE](LICENSE).
+Converter is MIT-licensed; see [LICENSE](LICENSE).
 
-The bundled FFmpeg builds are licensed under the GPL. They are downloaded by
-`scripts/fetch-ffmpeg.ts` from [ffmpeg.martin-riedl.de](https://ffmpeg.martin-riedl.de) (macOS and
-Linux) and [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) (Windows), which publish the source for
-their builds. Anyone distributing the installers must include FFmpeg's licence and say where its
-source can be obtained.
+The installers bundle FFmpeg. The bundled FFmpeg build is licensed under the GPLv3 and is
+downloaded by `scripts/fetch-ffmpeg.ts`. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for
+its licence and where to get its source.
