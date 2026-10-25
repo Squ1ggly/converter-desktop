@@ -1,3 +1,4 @@
+use std::ffi::{OsStr, OsString};
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -17,11 +18,10 @@ pub fn reserve_output_path(
 ) -> ConversionResult<PathBuf> {
     let stem = input_path
         .file_stem()
-        .map(|stem| stem.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "converted".to_string());
+        .unwrap_or_else(|| OsStr::new("converted"));
 
     for attempt in 1..=MAX_NAME_ATTEMPTS {
-        let candidate_path = directory.join(candidate_file_name(&stem, extension, attempt));
+        let candidate_path = directory.join(candidate_file_name(stem, extension, attempt));
         let creation_result = OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -41,12 +41,15 @@ pub fn reserve_output_path(
     Err(exhausted_error.into())
 }
 
-fn candidate_file_name(stem: &str, extension: &str, attempt: u32) -> String {
-    let file_name = if attempt == 1 {
-        format!("{stem}.{extension}")
-    } else {
-        format!("{stem} ({attempt}).{extension}")
-    };
+// Built as an OsString so names that aren't valid Unicode (allowed on Linux)
+// are kept byte for byte.
+fn candidate_file_name(stem: &OsStr, extension: &str, attempt: u32) -> OsString {
+    let mut file_name = stem.to_os_string();
+    if attempt > 1 {
+        file_name.push(format!(" ({attempt})"));
+    }
+    file_name.push(".");
+    file_name.push(extension);
     file_name
 }
 
@@ -65,6 +68,18 @@ mod tests {
 
         assert_eq!(first.file_name().unwrap(), "holiday.jpg");
         assert_eq!(second.file_name().unwrap(), "holiday (2).jpg");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn names_that_are_not_unicode_are_kept_byte_for_byte() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let stem = OsStr::from_bytes(b"caf\xe9");
+
+        let file_name = candidate_file_name(stem, "jpg", 2);
+
+        assert_eq!(file_name.as_bytes(), b"caf\xe9 (2).jpg");
     }
 
     #[test]
