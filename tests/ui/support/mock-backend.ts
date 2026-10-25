@@ -5,7 +5,14 @@ import type { Channel, InvokeArgs } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
-import type { ConversionCatalog, ConversionEvent, ConversionRequest, InspectedFile, MediaKind } from "$lib/backend";
+import type {
+  ConversionCatalog,
+  ConversionEvent,
+  ConversionRequest,
+  InspectedFile,
+  MediaKind,
+  PathInspection,
+} from "$lib/backend";
 import { buildCatalog, classifyFileName } from "./catalog";
 import type {
   BackendLog,
@@ -43,6 +50,8 @@ type DialogResult = string[] | string | null;
 
 const CLOSE_REQUESTED_EVENT = "tauri://close-requested";
 const QUIT_REQUESTED_EVENT = "quit-requested";
+// Like the backend, one add stops at this many files (MAX_INSPECTED_FILES in input_files.rs).
+const MAX_INSPECTED_FILES = 10_000;
 const DRAG_EVENT_NAMES: Record<DragEventType, string> = {
   enter: "tauri://drag-enter",
   drop: "tauri://drag-drop",
@@ -120,17 +129,21 @@ function inspectFile(path: string): InspectedFile {
   return inspectedFile;
 }
 
-function inspectPaths(paths: string[]): InspectedFile[] {
-  const inspectedFiles = paths.flatMap(expandFolder).map(inspectFile);
-  return inspectedFiles;
+function inspectPaths(paths: string[]): PathInspection {
+  const foundPaths = paths.flatMap(expandFolder);
+  const inspection: PathInspection = {
+    files: foundPaths.slice(0, MAX_INSPECTED_FILES).map(inspectFile),
+    isFileLimitReached: foundPaths.length > MAX_INSPECTED_FILES,
+  };
+  return inspection;
 }
 
-function inspectPathsWhenReleased(paths: string[]): InspectedFile[] | Promise<InspectedFile[]> {
+function inspectPathsWhenReleased(paths: string[]): PathInspection | Promise<PathInspection> {
   if (!isHoldingScans) {
     return inspectPaths(paths);
   }
 
-  const scanFinished = new Promise<InspectedFile[]>((resolve) => heldScans.push(() => resolve(inspectPaths(paths))));
+  const scanFinished = new Promise<PathInspection>((resolve) => heldScans.push(() => resolve(inspectPaths(paths))));
   return scanFinished;
 }
 
@@ -308,7 +321,7 @@ type CommandHandler = (payload: InvokeArgs | undefined) => unknown;
 
 const COMMAND_HANDLERS: Record<string, CommandHandler> = {
   get_catalog: () => getCatalog(),
-  inspect_paths: (payload) => inspectPathsWhenReleased(argumentsAs<{ paths: string[] }>(payload).paths),
+  inspect_input_paths: (payload) => inspectPathsWhenReleased(argumentsAs<{ paths: string[] }>(payload).paths),
   convert_files: (payload) => {
     const { request, onEvent } = argumentsAs<{ request: ConversionRequest; onEvent: Channel<ConversionEvent> }>(payload);
     return convertFiles(request, onEvent);

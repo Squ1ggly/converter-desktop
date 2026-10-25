@@ -3,7 +3,7 @@
   import { Progress } from "$lib/components/ui/progress/index.js";
   import { Spinner } from "$lib/components/ui/spinner/index.js";
   import { hasLostFocus } from "$lib/focus";
-  import { pluralise } from "$lib/formatting";
+  import { formatCount, pluralise } from "$lib/formatting";
   import ShortcutHint from "./ShortcutHint.svelte";
 
   interface Props {
@@ -49,7 +49,7 @@
   {#if isConverting}
     <div class="flex items-center gap-2 text-sm font-medium" aria-live="polite">
       <Spinner />
-      Converting {currentFileNumber} of {fileCount}
+      Converting {formatCount(currentFileNumber)} of {formatCount(fileCount)}
     </div>
     <Progress value={finishedCount} max={fileCount} aria-label="Overall progress" />
     <Button bind:ref={cancelButton} variant="outline" size="lg" class="w-full" onclick={onCancel} disabled={isCancelling}>

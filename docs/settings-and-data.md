@@ -50,8 +50,9 @@ On Linux, `$XDG_DATA_HOME` and `$XDG_CACHE_HOME` replace `~/.local/share` and `~
 they are set.
 
 - **Settings**: to go back to the defaults, quit the app and delete `settings.json`.
-- **Scratch files** are temporary images used during image conversions. The folder is emptied
-  every time the app starts.
+- **Scratch files** are temporary files used during conversions: images on their way to another
+  format, and the colour palettes used to make GIFs from videos. The folder is emptied every time
+  the app starts.
 - **Logs** record failed conversions and startup problems. Include them when reporting a bug.
 
 Converted files are only written to the [save location](saving.md) you choose. Nothing is

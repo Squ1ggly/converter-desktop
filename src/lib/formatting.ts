@@ -18,9 +18,15 @@ export function formatBytes(byteCount: number): string {
   return formattedSize;
 }
 
+// Groups digits, e.g. 10,000, to match the UI's English copy.
+export function formatCount(count: number): string {
+  const formattedCount = count.toLocaleString("en-US");
+  return formattedCount;
+}
+
 export function pluralise(count: number, singular: string, plural = `${singular}s`): string {
   const noun = count === 1 ? singular : plural;
-  const phrase = `${count} ${noun}`;
+  const phrase = `${formatCount(count)} ${noun}`;
   return phrase;
 }
 

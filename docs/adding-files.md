@@ -31,6 +31,9 @@ Folders are searched recursively, including every subfolder. Inside a folder:
 - Images and videos are added.
 - Other files are skipped without a message.
 - Hidden files and folders (names starting with `.`) are skipped.
+- Symlinked folders are skipped. A symlinked file is added as the file it points to.
+- Adding stops after 10,000 files, so a whole drive or home folder can't be added by mistake. The
+  app shows "Only the first 10,000 files were added". Add the rest from smaller folders.
 
 A large folder can take a moment to search. The list shows "Adding files" until it's done, and
 converting waits until then.

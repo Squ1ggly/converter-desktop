@@ -24,10 +24,11 @@ function fileList(page: Page): Locator {
   return list;
 }
 
-async function addFolderOf(page: Page, fileCount: number): Promise<MockBackend> {
+// `listedCount` is how many the list shows, when the backend's file limit cuts the folder short.
+async function addFolderOf(page: Page, fileCount: number, listedCount = fileCount): Promise<MockBackend> {
   const backend = await launchConverter(page, { folders: { [TRIP_FOLDER]: photoPaths(fileCount) } });
   await backend.dropFiles([TRIP_FOLDER]);
-  await expect(page.getByRole("heading", { name: `${fileCount} files` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `${listedCount.toLocaleString("en-US")} files` })).toBeVisible();
   return backend;
 }
 
@@ -44,6 +45,7 @@ async function scrollListTo(page: Page, fileName: string): Promise<void> {
 
 test("a thousand files only draw the rows in view", async ({ page }) => {
   await addFolderOf(page, 1000);
+  await expect(page.getByRole("button", { name: "Convert 1,000 files" })).toBeVisible();
 
   const rows = fileList(page).getByRole("listitem");
   expect(await rows.count()).toBeLessThan(MAX_RENDERED_ROWS);
@@ -76,6 +78,7 @@ test("hundreds of files convert and every result is counted", async ({ page }) =
   await page.getByRole("button", { name: "Convert 300 files" }).click();
 
   await expect(page.getByRole("heading", { name: "300 files converted" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Convert again" })).toBeVisible();
   await scrollListTo(page, "photo-0300.jpg");
   await expect(fileRow(page, "photo-0300.jpg").getByRole("button", { name: "Open" })).toBeVisible();
   const { conversionRequests } = await backend.readLog();
@@ -93,4 +96,18 @@ test("rows with long errors are measured, so they never overlap", async ({ page 
 
   await expect.poll(async () => countOverlappingRows(fileList(page))).toBe(0);
   await expect(fileRow(page, "photo-0001.jpg").getByRole("alert")).toHaveText(longError);
+});
+
+test("a folder over the file limit adds the first 10,000 files and says so", async ({ page }) => {
+  await addFolderOf(page, 10_001, 10_000);
+
+  const toast = page.getByRole("listitem").filter({ hasText: "Only the first 10,000 files were added" });
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText("Add the rest from smaller folders.");
+});
+
+test("a folder under the file limit adds every file without a warning", async ({ page }) => {
+  await addFolderOf(page, 1000);
+
+  await expect(page.getByText("Only the first 10,000 files were added")).toHaveCount(0);
 });

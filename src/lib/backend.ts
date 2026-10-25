@@ -27,6 +27,12 @@ export interface InspectedFile {
   kind: MediaKind | null;
 }
 
+export interface PathInspection {
+  files: InspectedFile[];
+  // True when the backend stopped at its file limit and left the rest out.
+  isFileLimitReached: boolean;
+}
+
 export type ResizeOption =
   | { mode: "original" }
   | { mode: "percent"; percent: number }
@@ -68,8 +74,8 @@ export function getCatalog(): Promise<ConversionCatalog> {
   return invoke<ConversionCatalog>("get_catalog");
 }
 
-export function inspectPaths(paths: string[]): Promise<InspectedFile[]> {
-  return invoke<InspectedFile[]>("inspect_paths", { paths });
+export function inspectInputPaths(paths: string[]): Promise<PathInspection> {
+  return invoke<PathInspection>("inspect_input_paths", { paths });
 }
 
 // Resolves once every file in the request has finished, failed or been
