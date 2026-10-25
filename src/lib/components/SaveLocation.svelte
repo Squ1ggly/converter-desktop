@@ -4,6 +4,7 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import * as Field from "$lib/components/ui/field/index.js";
   import * as RadioGroup from "$lib/components/ui/radio-group/index.js";
+  import { showError } from "$lib/errors";
   import type { SaveLocation } from "$lib/preferences";
 
   interface Props {
@@ -17,8 +18,13 @@
   const folderPath = $derived(saveLocation.mode === "folder" ? saveLocation.path : null);
 
   async function chooseFolder(): Promise<void> {
-    const chosenPath = await open({ directory: true, title: "Save converted files to" });
-    if (typeof chosenPath !== "string") {
+    let chosenPath: string | null = null;
+    try {
+      chosenPath = await open({ directory: true, title: "Save converted files to" });
+    } catch (error) {
+      showError("Couldn't open the folder picker", error);
+    }
+    if (chosenPath === null) {
       return;
     }
     saveLocation = { mode: "folder", path: chosenPath };

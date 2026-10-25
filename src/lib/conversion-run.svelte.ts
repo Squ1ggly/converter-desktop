@@ -32,9 +32,15 @@ export class ConversionRun {
     await this.#finished;
   }
 
+  // If a batch can't be cancelled, Cancel is offered again and the error is passed on.
   async cancel(): Promise<void> {
     this.isCancelling = true;
-    await Promise.all(this.#activeBatchIds.map((batchId) => cancelConversion(batchId)));
+    try {
+      await Promise.all(this.#activeBatchIds.map((batchId) => cancelConversion(batchId)));
+    } catch (error) {
+      this.isCancelling = false;
+      throw error;
+    }
   }
 
   waitUntilFinished(): Promise<void> {

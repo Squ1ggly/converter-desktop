@@ -3,6 +3,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { Button } from "$lib/components/ui/button/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
+  import { showError } from "$lib/errors";
   import { GUIDE_PAGES, resolveGuideLink } from "$lib/guide";
 
   let currentSlug = $state(GUIDE_PAGES[0]?.slug ?? "");
@@ -35,7 +36,15 @@
       void showPage(destination.slug, destination.anchor);
       return;
     }
-    void openUrl(destination.url);
+    void openInBrowser(destination.url);
+  }
+
+  async function openInBrowser(url: string): Promise<void> {
+    try {
+      await openUrl(url);
+    } catch (error) {
+      showError("Couldn't open the link", error);
+    }
   }
 </script>
 

@@ -5,7 +5,7 @@
   import type { Event as TauriEvent } from "@tauri-apps/api/event";
   import { getCurrentWebview, type DragDropEvent } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { open } from "@tauri-apps/plugin-dialog";
+  import { open, type OpenDialogOptions } from "@tauri-apps/plugin-dialog";
   import { Toaster } from "$lib/components/ui/sonner/index.js";
   import * as Tooltip from "$lib/components/ui/tooltip/index.js";
   import DropOverlay from "$lib/components/DropOverlay.svelte";
@@ -25,7 +25,7 @@
     type FormatOption,
   } from "$lib/backend";
   import { ConversionRun } from "$lib/conversion-run.svelte";
-  import { errorMessageOf } from "$lib/errors";
+  import { errorMessageOf, showError } from "$lib/errors";
   import { pluralise, revealInFolderLabel } from "$lib/formatting";
   import { PreferenceStore } from "$lib/preference-store.svelte";
   import { FileQueue } from "$lib/queue.svelte";
@@ -119,7 +119,7 @@
         });
       }
     } catch (error) {
-      toast.error("Couldn't add files", { description: errorMessageOf(error) });
+      showError("Couldn't add files", error);
     }
   }
 
@@ -129,7 +129,7 @@
     }
 
     const supportedExtensions = [...catalog.imageInputExtensions, ...catalog.videoInputExtensions];
-    const chosenPaths = await open({
+    const chosenPaths = await pickPaths("Couldn't open the file picker", {
       multiple: true,
       title: "Choose images or videos",
       filters: [
@@ -138,23 +138,54 @@
         { name: "Videos", extensions: catalog.videoInputExtensions },
       ],
     });
-    await addPaths(chosenPaths ?? []);
+    await addPaths(chosenPaths);
   }
 
   async function chooseFolder(): Promise<void> {
-    const chosenPaths = await open({ directory: true, multiple: true, title: "Choose folders" });
-    await addPaths(chosenPaths ?? []);
+    const chosenPaths = await pickPaths("Couldn't open the folder picker", {
+      directory: true,
+      multiple: true,
+      title: "Choose folders",
+    });
+    await addPaths(chosenPaths);
+  }
+
+  // Returns no paths if the picker is cancelled or can't open.
+  async function pickPaths(errorTitle: string, options: OpenDialogOptions & { multiple: true }): Promise<string[]> {
+    try {
+      const chosenPaths = await open(options);
+      return chosenPaths ?? [];
+    } catch (error) {
+      showError(errorTitle, error);
+      return [];
+    }
+  }
+
+  async function cancelConversion(): Promise<void> {
+    try {
+      await conversionRun.cancel();
+    } catch (error) {
+      showError("Couldn't cancel the conversion", error);
+    }
   }
 
   async function startConversion(): Promise<void> {
     await conversionRun.start($state.snapshot(preferenceStore.values));
   }
 
-  async function runFileAction(action: (path: string) => Promise<void>, path: string): Promise<void> {
+  async function openConvertedFile(path: string): Promise<void> {
     try {
-      await action(path);
+      await openOutput(path);
     } catch (error) {
-      toast.error(errorMessageOf(error));
+      showError("Couldn't open the file", error);
+    }
+  }
+
+  async function revealConvertedFile(path: string): Promise<void> {
+    try {
+      await revealOutput(path);
+    } catch (error) {
+      showError("Couldn't show the file", error);
     }
   }
 
@@ -285,8 +316,8 @@
             {videoTargetLabel}
             {revealLabel}
             onRemove={(itemId) => queue.remove(itemId)}
-            onOpen={(path) => runFileAction(openOutput, path)}
-            onReveal={(path) => runFileAction(revealOutput, path)}
+            onOpen={openConvertedFile}
+            onReveal={revealConvertedFile}
           />
           <SettingsPanel
             {catalog}
@@ -300,7 +331,7 @@
             isRerun={queue.hasFinishedRun}
             {platform}
             onConvert={startConversion}
-            onCancel={() => conversionRun.cancel()}
+            onCancel={cancelConversion}
           />
         </div>
       {/if}
