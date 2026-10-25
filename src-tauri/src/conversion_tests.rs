@@ -1098,3 +1098,89 @@ async fn exif_orientation_is_applied_to_photos() {
 
     assert_eq!((size, corner), ((32, 64), "top right"));
 }
+
+// Decodes an AVIF with its alpha, which FFmpeg reads as a second stream.
+async fn decode_avif_with_alpha(ffmpeg: &Ffmpeg, avif_path: &Path) -> RgbaImage {
+    let raw_path = avif_path.with_extension("rgba");
+    run_ffmpeg(
+        ffmpeg,
+        &[
+            "-i",
+            &avif_path.to_string_lossy(),
+            "-filter_complex",
+            "[0:v:0][0:v:1]alphamerge,format=rgba",
+            "-f",
+            "rawvideo",
+            &raw_path.to_string_lossy(),
+        ],
+    )
+    .await;
+    RgbaImage::from_raw(121, 81, std::fs::read(&raw_path).unwrap()).unwrap()
+}
+
+// The JPEG that our PDF output embeds as its only image.
+fn embedded_pdf_image(pdf_path: &Path) -> RgbaImage {
+    let pdf_bytes = std::fs::read(pdf_path).unwrap();
+    let jpeg_start = pdf_bytes
+        .windows(2)
+        .position(|marker| marker == [0xFF, 0xD8])
+        .unwrap();
+    let jpeg_end = pdf_bytes
+        .windows(2)
+        .rposition(|marker| marker == [0xFF, 0xD9])
+        .unwrap();
+    image::load_from_memory(&pdf_bytes[jpeg_start..jpeg_end + 2])
+        .unwrap()
+        .to_rgba8()
+}
+
+async fn converted_pixels(ffmpeg: &Ffmpeg, output_path: &Path, format: ImageFormat) -> RgbaImage {
+    match format {
+        ImageFormat::Avif => decode_avif_with_alpha(ffmpeg, output_path).await,
+        ImageFormat::Pdf => embedded_pdf_image(output_path),
+        _ => image::open(output_path).unwrap().to_rgba8(),
+    }
+}
+
+// The sample's corner is fully transparent and its centre is red at 160 of 255.
+#[tokio::test(flavor = "multi_thread")]
+async fn transparency_is_kept_or_flattened_onto_white() {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let directory = tempfile::tempdir().unwrap();
+    let png_path = directory.path().join("transparent.png");
+    write_transparent_png(&png_path);
+
+    let keeps_transparency = [
+        ImageFormat::Png,
+        ImageFormat::Webp,
+        ImageFormat::Avif,
+        ImageFormat::Tiff,
+        ImageFormat::Gif,
+    ];
+    for format in keeps_transparency {
+        let output_path =
+            convert_image_to(&png_path, format, ResizeOption::Original, directory.path())
+                .await
+                .unwrap();
+        let pixels = converted_pixels(&ffmpeg, &output_path, format).await;
+        let corner_alpha = pixels.get_pixel(0, 0).0[3];
+        let centre_alpha = pixels.get_pixel(60, 40).0[3];
+        assert!(corner_alpha < 5, "{format:?} corner alpha {corner_alpha}");
+        assert!(centre_alpha > 100, "{format:?} centre alpha {centre_alpha}");
+    }
+
+    for format in [ImageFormat::Jpg, ImageFormat::Bmp, ImageFormat::Pdf] {
+        let output_path =
+            convert_image_to(&png_path, format, ResizeOption::Original, directory.path())
+                .await
+                .unwrap();
+        let pixels = converted_pixels(&ffmpeg, &output_path, format).await;
+        let [red, green, blue, alpha] = pixels.get_pixel(0, 0).0;
+        let is_white = red > 250 && green > 250 && blue > 250 && alpha == 255;
+        assert!(
+            is_white,
+            "{format:?} corner is {:?}",
+            [red, green, blue, alpha]
+        );
+    }
+}
