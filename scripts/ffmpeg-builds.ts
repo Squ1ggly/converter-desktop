@@ -45,12 +45,12 @@ const RELEASE_SOURCE: FfmpegReleaseSource = {
   sha256: "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e",
 };
 
-// BtbN builds the 9.0 release branch, so its Windows ARM64 build is a few fixes past 9.0.2.
+// BtbN builds the 9.0 release branch rather than releases, so its version is a branch snapshot.
 const BTBN_SOURCE: FfmpegCommitSource = {
   kind: "commit",
-  version: "n9.0.2-17-g2a571b6068",
+  version: "n9.0.1-11-ge47273f4d9",
   repository: "https://github.com/FFmpeg/FFmpeg",
-  commit: "2a571b606854520cf89804d8030c8b328e621689",
+  commit: "e47273f4d9227152dcbf543cebaf9e2430ddbcc4",
 };
 
 const MARTIN_RIEDL: FfmpegBuilder = {
@@ -64,7 +64,9 @@ const GYAN: FfmpegBuilder = {
 };
 
 // The last build of each month is kept for two years, so pin one of those, not a daily build.
-const BTBN_RELEASE_TAG = "autobuild-2026-09-30-13-08";
+// The Windows ARM64 builds from 2026-09-24 to 2026-10-03 crash on start
+// (https://github.com/BtbN/FFmpeg-Builds/issues/675), so this is the August one.
+const BTBN_RELEASE_TAG = "autobuild-2026-08-31-13-27";
 const BTBN_ARCHIVE_NAME = `ffmpeg-${BTBN_SOURCE.version}-winarm64-gpl-9.0`;
 
 const BTBN: FfmpegBuilder = {
@@ -101,7 +103,7 @@ export const FFMPEG_BUILDS: Record<string, FfmpegBuild> = {
     platformName: "Windows ARM64",
     builder: BTBN,
     url: `https://github.com/BtbN/FFmpeg-Builds/releases/download/${BTBN_RELEASE_TAG}/${BTBN_ARCHIVE_NAME}.zip`,
-    sha256: "6dcd0626f9f6d6c7323565e57410e9f37ed14a85946ec9ea9caff294ca32f5c0",
+    sha256: "7e6142ae4d04b35123eba48d91bb2c559ef43b49a6b3857f7324bbcf7266d18b",
     entryPath: `${BTBN_ARCHIVE_NAME}/bin/ffmpeg.exe`,
     source: BTBN_SOURCE,
   },

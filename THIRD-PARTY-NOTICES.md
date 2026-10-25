@@ -17,7 +17,7 @@ Public License, version 3 or later. The installers include the licence as
 | macOS, Apple Silicon | 9.0.2 | [Martin Riedl](https://git.martin-riedl.de/ffmpeg/build-script) | `ffmpeg-buildconf-aarch64-apple-darwin.txt` |
 | macOS, Intel | 9.0.2 | [Martin Riedl](https://git.martin-riedl.de/ffmpeg/build-script) | `ffmpeg-buildconf-x86_64-apple-darwin.txt` |
 | Windows x64 | 9.0.2 | [Gyan Doshi](https://www.gyan.dev/ffmpeg/builds/) | `ffmpeg-buildconf-x86_64-pc-windows-msvc.txt` |
-| Windows ARM64 | n9.0.2-17-g2a571b6068 | [BtbN](https://github.com/BtbN/FFmpeg-Builds/tree/autobuild-2026-09-30-13-08) | `ffmpeg-buildconf-aarch64-pc-windows-msvc.txt` |
+| Windows ARM64 | n9.0.1-11-ge47273f4d9 | [BtbN](https://github.com/BtbN/FFmpeg-Builds/tree/autobuild-2026-08-31-13-27) | `ffmpeg-buildconf-aarch64-pc-windows-msvc.txt` |
 | Linux x64 | 9.0.2 | [Martin Riedl](https://git.martin-riedl.de/ffmpeg/build-script) | `ffmpeg-buildconf-x86_64-unknown-linux-gnu.txt` |
 | Linux ARM64 | 9.0.2 | [Martin Riedl](https://git.martin-riedl.de/ffmpeg/build-script) | `ffmpeg-buildconf-aarch64-unknown-linux-gnu.txt` |
 
@@ -27,7 +27,7 @@ Every [Converter release](https://github.com/Squ1ggly/converter-desktop/releases
 installers:
 
 - `ffmpeg-9.0.2.tar.xz`: the FFmpeg 9.0.2 release from https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
-- `ffmpeg-n9.0.2-17-g2a571b6068.tar.gz`: FFmpeg commit `2a571b606854520cf89804d8030c8b328e621689` from https://github.com/FFmpeg/FFmpeg
+- `ffmpeg-n9.0.1-11-ge47273f4d9.tar.gz`: FFmpeg commit `e47273f4d9227152dcbf543cebaf9e2430ddbcc4` from https://github.com/FFmpeg/FFmpeg
 - `ffmpeg-buildconf-<target>.txt`: the configuration each build was made with, as printed by
   `converter-ffmpeg -buildconf`
 
