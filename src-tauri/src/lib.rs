@@ -1,36 +1,52 @@
 mod batch;
+#[cfg(test)]
+mod batch_tests;
+mod child_lifetime;
 mod commands;
 #[cfg(test)]
 mod conversion_tests;
 mod error;
 mod ffmpeg;
 mod formats;
+#[cfg(test)]
+mod heif_test_files;
 mod image_conversion;
+mod input_files;
 mod options;
 mod output_path;
+mod quit;
+mod scratch;
 mod state;
 mod video_conversion;
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
-use tauri::{App, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::window::Color;
+use tauri::{App, AppHandle, Manager, Theme, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_log::{Target, TargetKind};
 
 use crate::ffmpeg::Ffmpeg;
 use crate::state::{ActiveBatches, AppState, ProducedOutputs};
 
 // Must match the window listed in capabilities/default.json.
-const MAIN_WINDOW_LABEL: &str = "main";
+pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
+
+// --background in src/app.css (oklch(1 0 0) and oklch(0.145 0 0)) as sRGB.
+// Shown until the page has loaded, so a dark window doesn't flash white.
+const LIGHT_BACKGROUND: Color = Color(255, 255, 255, 255);
+const DARK_BACKGROUND: Color = Color(10, 10, 10, 255);
 
 // Centres the window buttons in the 52px toolbar (h-13 in Toolbar.svelte).
 // Measured: macOS offsets the buttons from this point, so it isn't (52 - 14) / 2.
 #[cfg(target_os = "macos")]
 const TRAFFIC_LIGHT_POSITION: (f64, f64) = (18.0, 27.0);
 
+/// # Panics
+///
+/// If the app can't start, for example because the window can't be created.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // Must be registered first. A second launch focuses the open window instead
         // of starting another copy, which would clear this one's scratch folder.
         .plugin(tauri_plugin_single_instance::init(
@@ -53,7 +69,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .setup(|app| {
-            let app_state = create_app_state(app)?;
+            let app_state = create_app_state(app);
             app.manage(app_state);
             create_main_window(app)?;
             Ok(())
@@ -61,13 +77,22 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_catalog,
             commands::inspect_paths,
+            commands::inspect_input_paths,
             commands::convert_files,
             commands::cancel_conversion,
             commands::reveal_output,
             commands::open_output,
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running the Converter app");
+        ]);
+
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .menu(quit::build_macos_menu)
+        .on_menu_event(quit::handle_menu_event);
+
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("error while starting the Converter app");
+    app.run(quit::handle_run_event);
 }
 
 // Built in code so the macOS title bar options don't need a second config.
@@ -87,41 +112,67 @@ fn create_main_window(app: &App) -> tauri::Result<()> {
             TRAFFIC_LIGHT_POSITION.1,
         ));
 
-    window_builder.build()?;
+    // Hidden until its background matches the system theme.
+    let window = window_builder.visible(false).build()?;
+    let background = background_for_theme(window.theme().unwrap_or(Theme::Light));
+    window.set_background_color(Some(background))?;
+    window.show()?;
     Ok(())
 }
 
-fn create_app_state(app: &App) -> Result<AppState, Box<dyn std::error::Error>> {
+fn background_for_theme(theme: Theme) -> Color {
+    let background = if theme == Theme::Dark {
+        DARK_BACKGROUND
+    } else {
+        LIGHT_BACKGROUND
+    };
+    background
+}
+
+fn create_app_state(app: &App) -> AppState {
     let ffmpeg = Ffmpeg::locate().map_err(|error| error.to_string());
     if let Err(message) = &ffmpeg {
         log::error!("{message}");
     }
 
+    // Without a cache folder, scratch files go in the system's temporary folder.
+    let cache_directory = app
+        .path()
+        .app_cache_dir()
+        .unwrap_or_else(|_| std::env::temp_dir());
+
     let app_state = AppState {
         ffmpeg,
-        scratch_root: prepare_scratch_root(app)?,
+        scratch_root: scratch::prepare_scratch_root(&cache_directory),
         active_batches: ActiveBatches::default(),
         produced_outputs: Arc::new(ProducedOutputs::default()),
     };
-    Ok(app_state)
+    app_state
 }
 
-// Per-user scratch folder, cleared on launch.
-fn prepare_scratch_root(app: &App) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let scratch_root = app.path().app_cache_dir()?.join("scratch");
-
-    if scratch_root.exists() {
-        std::fs::remove_dir_all(&scratch_root)?;
-    }
-    std::fs::create_dir_all(&scratch_root)?;
-
-    Ok(scratch_root)
-}
-
-fn focus_main_window(app: &AppHandle) {
+pub(crate) fn focus_main_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
         return;
     };
     let _ = window.unminimize();
     let _ = window.set_focus();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The window colours are copies of the page's, so a theme change has to
+    // update both.
+    #[test]
+    fn window_backgrounds_match_the_page_theme() {
+        let stylesheet_path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/app.css");
+        let stylesheet = std::fs::read_to_string(stylesheet_path).unwrap();
+
+        assert!(stylesheet.contains("--background: oklch(1 0 0);"));
+        assert!(stylesheet.contains("--background: oklch(0.145 0 0);"));
+        assert_eq!(background_for_theme(Theme::Light), LIGHT_BACKGROUND);
+        assert_eq!(background_for_theme(Theme::Dark), DARK_BACKGROUND);
+    }
 }

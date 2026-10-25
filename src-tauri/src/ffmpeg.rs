@@ -1,14 +1,15 @@
 use std::collections::VecDeque;
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{ChildStderr, ChildStdout, Command};
+use tokio::process::{Child, ChildStderr, ChildStdout, Command};
 use tokio_util::sync::CancellationToken;
 
+use crate::child_lifetime;
 use crate::error::{ConversionError, ConversionResult};
 
 // Enough of FFmpeg's log to find the real error, which is usually near the end.
@@ -43,39 +44,35 @@ impl Ffmpeg {
     }
 
     #[cfg(test)]
-    pub fn binary_path(&self) -> &std::path::Path {
+    pub fn binary_path(&self) -> &Path {
         &self.binary_path
     }
 
     // Tests run from target/debug/deps, where no sidecar is copied.
     #[cfg(test)]
     pub fn from_downloaded_binary() -> Ffmpeg {
-        let binaries_directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries");
+        let binaries_directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries");
+        let sidecar_prefix = format!("{SIDECAR_NAME}-");
+        let missing_message = "No FFmpeg in src-tauri/binaries. Run `pnpm fetch-ffmpeg` first.";
+
         let binary_path = std::fs::read_dir(&binaries_directory)
-            .ok()
-            .and_then(|entries| {
-                entries
-                    .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-                    .find(|path| {
-                        path.file_name().is_some_and(|name| {
-                            name.to_string_lossy()
-                                .starts_with(&format!("{SIDECAR_NAME}-"))
-                        })
-                    })
-            })
-            .expect("No FFmpeg in src-tauri/binaries. Run `pnpm fetch-ffmpeg` first.");
+            .expect(missing_message)
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .find(|path| file_name_starts_with(path, &sidecar_prefix))
+            .expect(missing_message);
 
         Ffmpeg { binary_path }
     }
 
     // Reports 0–99% progress when the input has a known duration.
-    // Cancelling kills the process.
+    // Cancelling kills the process and waits for it to exit.
     pub async fn run(
         &self,
         arguments: Vec<OsString>,
         cancellation: &CancellationToken,
         on_progress: impl FnMut(f32),
     ) -> ConversionResult<()> {
+        let path_arguments = absolute_path_arguments(&arguments);
         let mut command = Command::new(&self.binary_path);
         command
             .args([
@@ -94,8 +91,11 @@ impl Ffmpeg {
         hide_console_window(&mut command);
 
         let mut child = command.spawn()?;
-        let stdout = child.stdout.take().expect("stdout is piped");
-        let stderr = child.stderr.take().expect("stderr is piped");
+        child_lifetime::end_with_app(&child);
+        let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+            stop_process(&mut child).await;
+            return Err(std::io::Error::other("FFmpeg's output couldn't be read").into());
+        };
 
         let total_duration_microseconds = Arc::new(AtomicU64::new(0));
         let stderr_task = tokio::spawn(collect_stderr(stderr, total_duration_microseconds.clone()));
@@ -104,21 +104,43 @@ impl Ffmpeg {
             report_progress(stdout, &total_duration_microseconds, on_progress).await;
             child.wait().await
         };
-
-        // Returning early drops `child`, and `kill_on_drop` stops the process.
-        let exit_status = tokio::select! {
-            exit_status = run_to_completion => exit_status?,
-            _ = cancellation.cancelled() => return Err(ConversionError::Cancelled),
+        let finished_exit_status = tokio::select! {
+            exit_status = run_to_completion => Some(exit_status),
+            () = cancellation.cancelled() => None,
         };
+
+        let Some(exit_status) = finished_exit_status else {
+            stop_process(&mut child).await;
+            return Err(ConversionError::Cancelled);
+        };
+        let exit_status = exit_status?;
 
         if exit_status.success() {
             return Ok(());
         }
 
         let stderr_lines = stderr_task.await.unwrap_or_default();
-        let error_message = extract_error_message(&stderr_lines);
+        log::warn!("FFmpeg failed:\n{}", stderr_lines.join("\n"));
+        let error_message = extract_error_message(&stderr_lines, &path_arguments);
         Err(ConversionError::Ffmpeg(error_message))
     }
+}
+
+// Waits for the process to end, so its files are closed before the caller
+// deletes them. Windows can't delete a file another process has open.
+async fn stop_process(child: &mut Child) {
+    if let Err(error) = child.kill().await {
+        log::warn!("couldn't stop FFmpeg: {error}");
+    }
+}
+
+#[cfg(test)]
+fn file_name_starts_with(path: &Path, prefix: &str) -> bool {
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy())
+        .unwrap_or_default();
+    file_name.starts_with(prefix)
 }
 
 #[cfg(windows)]
@@ -181,6 +203,11 @@ fn record_duration_if_present(line: &str, total_duration_microseconds: &AtomicU6
 }
 
 // Parses FFmpeg's input summary, e.g. "  Duration: 00:01:23.45, start: ...".
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the duration is positive, and float to int casts saturate"
+)]
 fn parse_duration_microseconds(line: &str) -> Option<u64> {
     let after_label = line.trim_start().strip_prefix("Duration: ")?;
     let timestamp = after_label.split(',').next()?;
@@ -200,6 +227,10 @@ fn parse_duration_microseconds(line: &str) -> Option<u64> {
 }
 
 // Parses one `-progress` line, e.g. "out_time_us=1234567".
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "a percentage needs no more than f32's precision"
+)]
 fn parse_progress_percent(line: &str, total_microseconds: u64) -> Option<f32> {
     if total_microseconds == 0 {
         return None;
@@ -213,24 +244,40 @@ fn parse_progress_percent(line: &str, total_microseconds: u64) -> Option<f32> {
     Some(clamped_percent)
 }
 
-fn extract_error_message(stderr_lines: &[String]) -> String {
-    let explicit_error_line = stderr_lines.iter().rev().find(|line| {
+// FFmpeg's own bookkeeping, repeated after every real error.
+const NOISE_LINE_MARKERS: [&str; 2] = [
+    "Terminating thread with return code",
+    "Task finished with error code",
+];
+
+fn extract_error_message(stderr_lines: &[String], path_arguments: &[String]) -> String {
+    let cleaned_lines: Vec<String> = stderr_lines
+        .iter()
+        .filter(|line| {
+            !NOISE_LINE_MARKERS
+                .iter()
+                .any(|marker| line.contains(marker))
+        })
+        .map(|line| clean_log_line(line, path_arguments))
+        .filter(|line| !line.is_empty())
+        .collect();
+
+    let explicit_error_line = cleaned_lines.iter().rev().find(|line| {
         line.contains("Error")
             || line.contains("Invalid")
             || line.contains("No such")
             || line.contains("not supported")
     });
-
     if let Some(error_line) = explicit_error_line {
-        return error_line.trim().to_string();
+        return error_line.clone();
     }
 
-    let last_lines: Vec<&str> = stderr_lines
+    let last_lines: Vec<&str> = cleaned_lines
         .iter()
         .rev()
         .take(2)
         .rev()
-        .map(|line| line.trim())
+        .map(String::as_str)
         .collect();
     let fallback_message = if last_lines.is_empty() {
         "FFmpeg could not convert this file".to_string()
@@ -238,6 +285,37 @@ fn extract_error_message(stderr_lines: &[String]) -> String {
         last_lines.join(" ")
     };
     fallback_message
+}
+
+fn absolute_path_arguments(arguments: &[OsString]) -> Vec<String> {
+    let path_arguments = arguments
+        .iter()
+        .filter(|argument| Path::new(argument).is_absolute())
+        .filter_map(|argument| argument.to_str().map(str::to_string))
+        .collect();
+    path_arguments
+}
+
+// Drops "[out#0/image2 @ 0x6000038c4000] " style prefixes, and shortens the
+// full paths FFmpeg was given to their file names.
+fn clean_log_line(line: &str, path_arguments: &[String]) -> String {
+    let mut message = line.trim();
+    while message.starts_with('[') {
+        let Some(prefix_end) = message.find("] ") else {
+            break;
+        };
+        message = message[prefix_end + 2..].trim_start();
+    }
+
+    let mut cleaned_line = message.to_string();
+    for path_argument in path_arguments {
+        let file_name = Path::new(path_argument)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        cleaned_line = cleaned_line.replace(path_argument.as_str(), &file_name);
+    }
+    cleaned_line
 }
 
 #[cfg(test)]
@@ -280,8 +358,25 @@ mod tests {
             "Exiting".to_string(),
         ];
         assert_eq!(
-            extract_error_message(&lines),
+            extract_error_message(&lines, &[]),
             "Error opening input file broken.mov."
+        );
+    }
+
+    #[test]
+    fn error_lines_lose_log_prefixes_addresses_and_folders() {
+        let output_path = "/Users/sam/Pictures/Week 3/photo.webp".to_string();
+        let lines = vec![
+            "[out#0/image2 @ 0x6000038c4000] [enc:png @ 0x1319] Error opening output /Users/sam/Pictures/Week 3/photo.webp: Permission denied".to_string(),
+            "[vost#0:0/png @ 0x1319051e0] Task finished with error code: -22 (Invalid argument)".to_string(),
+            "[vf#0:0 @ 0x13200a600] Terminating thread with return code -22 (Invalid argument)".to_string(),
+        ];
+
+        let message = extract_error_message(&lines, &[output_path]);
+
+        assert_eq!(
+            message,
+            "Error opening output photo.webp: Permission denied"
         );
     }
 }
