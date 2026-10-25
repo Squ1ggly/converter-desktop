@@ -26,7 +26,7 @@ Click **Cancel**. The button shows "Cancelling" until every file has stopped.
 ## Results
 
 When every file has finished, the heading shows how many converted, plus how many failed or were
-cancelled.
+cancelled. If none converted, the heading shows how many failed, for example "3 failed".
 
 | Action | Where | What it does |
 |---|---|---|

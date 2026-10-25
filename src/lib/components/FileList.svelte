@@ -35,28 +35,35 @@
   const firstOutputPath = $derived(queue.items.find((item) => item.outputPath !== null)?.outputPath ?? null);
   const summary = $derived(queue.summary);
 
-  const heading = $derived(
-    queue.hasFinishedRun ? `${pluralise(summary.doneCount, "file")} converted` : pluralise(queue.items.length, "file"),
-  );
-
-  const subheading = $derived.by(() => {
+  // Before a run: "3 files" over "2 images · 1 video". After: what happened,
+  // led by the converted count, or by the failures if nothing converted.
+  const resultParts = $derived.by(() => {
     const parts: string[] = [];
-    if (queue.hasFinishedRun && summary.failedCount > 0) {
+    if (summary.doneCount > 0) {
+      parts.push(`${pluralise(summary.doneCount, "file")} converted`);
+    }
+    if (summary.failedCount > 0) {
       parts.push(`${summary.failedCount} failed`);
     }
-    if (queue.hasFinishedRun && summary.cancelledCount > 0) {
+    if (summary.cancelledCount > 0) {
       parts.push(`${summary.cancelledCount} cancelled`);
     }
-    if (!queue.hasFinishedRun && queue.images.length > 0) {
+    return parts;
+  });
+
+  const kindParts = $derived.by(() => {
+    const parts: string[] = [];
+    if (queue.images.length > 0) {
       parts.push(pluralise(queue.images.length, "image"));
     }
-    if (!queue.hasFinishedRun && queue.videos.length > 0) {
+    if (queue.videos.length > 0) {
       parts.push(pluralise(queue.videos.length, "video"));
     }
-
-    const joinedParts = parts.join(" · ");
-    return joinedParts;
+    return parts;
   });
+
+  const heading = $derived(queue.hasFinishedRun ? (resultParts[0] ?? "") : pluralise(queue.items.length, "file"));
+  const subheading = $derived((queue.hasFinishedRun ? resultParts.slice(1) : kindParts).join(" · "));
 </script>
 
 <section class="flex min-h-0 min-w-0 flex-col" aria-label="Files">

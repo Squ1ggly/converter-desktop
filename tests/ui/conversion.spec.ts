@@ -178,3 +178,23 @@ test("files a batch never reported on are marked failed when it ends", async ({ 
   await expect(fileRow(page, "beach.png")).toContainText("Done");
   await expect(page.getByRole("button", { name: "Convert again" })).toBeVisible();
 });
+
+test("when every file fails the heading says how many failed", async ({ page }) => {
+  await launchWithFiles(page, [BEACH_PHOTO, CITY_PHOTO], {
+    failingFiles: { "beach.png": "Permission denied", "city.jpg": "Permission denied" },
+  });
+
+  await page.getByRole("button", { name: "Convert 2 files" }).click();
+
+  await expect(page.getByRole("heading", { name: "2 failed" })).toBeVisible();
+  await expect(page.getByText("0 files converted")).toHaveCount(0);
+});
+
+test("when every file is cancelled the heading says how many were cancelled", async ({ page }) => {
+  await launchWithFiles(page, [BEACH_PHOTO, CITY_PHOTO], { conversionMode: "manual" });
+  await page.getByRole("button", { name: "Convert 2 files" }).click();
+
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await expect(page.getByRole("heading", { name: "2 cancelled" })).toBeVisible();
+});
