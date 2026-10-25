@@ -44,7 +44,7 @@ remove_package() {
   esac
 }
 
-# A WebKitWebProcess means the window's web view started, not just the main process.
+# A WebKitWebProcess means the window's web view started, not only the main process.
 web_process_is_running() {
   grep -qs 'WebKitWebProces[s]' /proc/[0-9]*/cmdline
 }

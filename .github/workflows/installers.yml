@@ -44,8 +44,8 @@ jobs:
         include:
           - target: aarch64-apple-darwin
             runner: macos-latest
-          # Cross-compiled: pnpm 11 has no native build for Intel Macs, so it can't run on
-          # macos-15-intel. The installer is still tested on an Intel Mac below.
+          # Cross-compiled: the pnpm version in package.json ships no Intel Mac binary, so pnpm
+          # can't switch to it on macos-15-intel. The installer is still tested on an Intel Mac.
           - target: x86_64-apple-darwin
             runner: macos-latest
           - target: x86_64-pc-windows-msvc

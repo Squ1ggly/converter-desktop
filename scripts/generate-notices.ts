@@ -75,7 +75,7 @@ function packageDirectoryOf(moduleId: string): string | undefined {
   return packageDirectory;
 }
 
-// Turns "github:owner/name", "owner/name" and "git+https://...git" into a browsable URL.
+// Turns "github:owner/name", "owner/name" and "git+https://host/owner/name.git" into a browsable URL.
 function homepageOf(packageJson: PackageJson): string {
   if (packageJson.homepage) {
     return packageJson.homepage;
