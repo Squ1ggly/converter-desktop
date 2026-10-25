@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest a new feature or an improvement.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Check the existing issues first, in case it has already been suggested.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: Describe the task, and what makes it hard or impossible today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: How you would like the app to handle it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other ways you have tried or considered.
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      description: Choose the systems this applies to.
+      multiple: true
+      options:
+        - macOS
+        - Windows
+        - Linux

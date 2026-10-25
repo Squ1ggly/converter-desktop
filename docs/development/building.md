@@ -32,7 +32,7 @@ Without it, `pnpm dev` and `pnpm build` fail because the sidecar is missing.
 |---|---|
 | `pnpm dev` | Runs the app with hot reload |
 | `pnpm build` | Builds the installers for this machine |
-| `pnpm check` | Type-checks the Svelte and TypeScript UI |
+| `pnpm check` | Type-checks the UI, scripts and UI tests with svelte-check, and the end-to-end tests with tsc |
 | `pnpm ui:dev` | Runs only the UI in Vite, on port 1420 |
 | `pnpm ui:build` | Builds only the UI into `dist/` |
 | `pnpm fetch-ffmpeg [--target <triple>]` | Downloads and checksum-verifies FFmpeg for this machine or the given target |
@@ -44,7 +44,8 @@ For tests, see [Testing](../../CONTRIBUTING.md#testing).
 ## FFmpeg
 
 `pnpm fetch-ffmpeg` detects this machine's target from `rustc -vV`, downloads the pinned archive,
-checks its SHA-256, and saves the executable as `src-tauri/binaries/converter-ffmpeg-<target triple>`.
+checks its SHA-256, and saves the executable as `src-tauri/binaries/converter-ffmpeg-<target triple>`
+(with `.exe` on Windows). The folder is gitignored.
 
 Supported targets:
 
