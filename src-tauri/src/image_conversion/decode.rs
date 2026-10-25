@@ -92,9 +92,12 @@ async fn decode_raster(
         return Err(image_crate_error);
     }
 
-    let ffmpeg_result =
-        decode_with_ffmpeg(input_path, ffmpeg, scratch_directory, cancellation).await;
-    ffmpeg_result.map_err(|_| ConversionError::UnreadableImage(image_crate_error.to_string()))
+    // FFmpeg's error would be about a format the file was never meant to be,
+    // so the image crate's is the one reported.
+    let decoded_image = decode_with_ffmpeg(input_path, ffmpeg, scratch_directory, cancellation)
+        .await
+        .map_err(|_| ConversionError::UnreadableImage(image_crate_error.to_string()))?;
+    Ok(decoded_image)
 }
 
 // Applies the EXIF orientation so phone photos aren't saved sideways.

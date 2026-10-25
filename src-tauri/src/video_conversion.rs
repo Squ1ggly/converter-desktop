@@ -225,7 +225,8 @@ fn h264_codec_flags(quality: VideoQuality) -> Vec<String> {
         "-b:a",
         audio_bitrate,
     ];
-    flags.map(String::from).to_vec()
+    let owned_flags = flags.map(String::from).to_vec();
+    owned_flags
 }
 
 fn webm_codec_flags(quality: VideoQuality) -> Vec<String> {
@@ -252,7 +253,8 @@ fn webm_codec_flags(quality: VideoQuality) -> Vec<String> {
         "-b:a",
         audio_bitrate,
     ];
-    flags.map(String::from).to_vec()
+    let owned_flags = flags.map(String::from).to_vec();
+    owned_flags
 }
 
 fn avi_codec_flags(quality: VideoQuality) -> Vec<String> {
@@ -272,7 +274,8 @@ fn avi_codec_flags(quality: VideoQuality) -> Vec<String> {
         "-b:a",
         audio_bitrate,
     ];
-    flags.map(String::from).to_vec()
+    let owned_flags = flags.map(String::from).to_vec();
+    owned_flags
 }
 
 #[cfg(test)]

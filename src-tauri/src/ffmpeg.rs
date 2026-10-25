@@ -44,27 +44,22 @@ impl Ffmpeg {
     }
 
     #[cfg(test)]
-    pub fn binary_path(&self) -> &std::path::Path {
+    pub fn binary_path(&self) -> &Path {
         &self.binary_path
     }
 
     // Tests run from target/debug/deps, where no sidecar is copied.
     #[cfg(test)]
     pub fn from_downloaded_binary() -> Ffmpeg {
-        let binaries_directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries");
+        let binaries_directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries");
+        let sidecar_prefix = format!("{SIDECAR_NAME}-");
+        let missing_message = "No FFmpeg in src-tauri/binaries. Run `pnpm fetch-ffmpeg` first.";
+
         let binary_path = std::fs::read_dir(&binaries_directory)
-            .ok()
-            .and_then(|entries| {
-                entries
-                    .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-                    .find(|path| {
-                        path.file_name().is_some_and(|name| {
-                            name.to_string_lossy()
-                                .starts_with(&format!("{SIDECAR_NAME}-"))
-                        })
-                    })
-            })
-            .expect("No FFmpeg in src-tauri/binaries. Run `pnpm fetch-ffmpeg` first.");
+            .expect(missing_message)
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .find(|path| file_name_starts_with(path, &sidecar_prefix))
+            .expect(missing_message);
 
         Ffmpeg { binary_path }
     }
@@ -137,6 +132,15 @@ async fn stop_process(child: &mut Child) {
     if let Err(error) = child.kill().await {
         log::warn!("couldn't stop FFmpeg: {error}");
     }
+}
+
+#[cfg(test)]
+fn file_name_starts_with(path: &Path, prefix: &str) -> bool {
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy())
+        .unwrap_or_default();
+    file_name.starts_with(prefix)
 }
 
 #[cfg(windows)]
