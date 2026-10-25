@@ -124,3 +124,48 @@ test("a window that can't close says so and offers Quit again", async ({ page })
   await expect(toast).toContainText("The window is busy");
   await expect(page.getByRole("button", { name: "Quit", exact: true })).toBeEnabled();
 });
+
+test("quitting from the menu while converting asks first", async ({ page }) => {
+  const backend = await startConvertingTwoBatches(page);
+
+  await backend.requestQuitFromMenu();
+
+  await expect(page.getByRole("alertdialog", { name: "Quit while converting?" })).toBeVisible();
+  const { windowDestroys, cancelledBatchIds } = await backend.readLog();
+  expect(windowDestroys).toEqual([]);
+  expect(cancelledBatchIds).toEqual([]);
+});
+
+test("confirming a quit from the menu cancels every batch, then closes the window", async ({ page }) => {
+  const backend = await startConvertingTwoBatches(page);
+  await backend.requestQuitFromMenu();
+
+  await page.getByRole("button", { name: "Quit", exact: true }).click();
+
+  await expect.poll(async () => (await backend.readLog()).windowDestroys).toEqual([{ runningBatchCount: 0 }]);
+  const { cancelledBatchIds } = await backend.readLog();
+  expect(cancelledBatchIds).toHaveLength(2);
+});
+
+test("Keep converting after a quit from the menu carries on", async ({ page }) => {
+  const backend = await startConvertingTwoBatches(page);
+  await backend.requestQuitFromMenu();
+
+  await page.getByRole("button", { name: "Keep converting" }).click();
+
+  await expect(page.getByRole("alertdialog")).toBeHidden();
+  await expect(page.getByText("Converting 1 of 2")).toBeVisible();
+  const { windowDestroys } = await backend.readLog();
+  expect(windowDestroys).toEqual([]);
+});
+
+test("a quit from the menu that arrives after the run ended quits straight away", async ({ page }) => {
+  const backend = await launchWithFiles(page, [BEACH_PHOTO]);
+  await page.getByRole("button", { name: "Convert 1 file" }).click();
+  await expect(page.getByRole("heading", { name: "1 file converted" })).toBeVisible();
+
+  await backend.requestQuitFromMenu();
+
+  await expect.poll(async () => (await backend.readLog()).windowDestroys).toHaveLength(1);
+  await expect(page.getByRole("alertdialog")).toBeHidden();
+});

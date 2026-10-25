@@ -42,6 +42,7 @@ interface ActiveBatch {
 type DialogResult = string[] | string | null;
 
 const CLOSE_REQUESTED_EVENT = "tauri://close-requested";
+const QUIT_REQUESTED_EVENT = "quit-requested";
 const DRAG_EVENT_NAMES: Record<DragEventType, string> = {
   enter: "tauri://drag-enter",
   drop: "tauri://drag-drop",
@@ -374,6 +375,7 @@ const controls: MockBackendControls = {
   releaseScans,
   releaseCatalog: () => releaseHeldCatalog(),
   requestWindowClose: () => emit(CLOSE_REQUESTED_EVENT, null),
+  requestQuitFromMenu: () => emit(QUIT_REQUESTED_EVENT, null),
   readLog: () => backendLog,
 };
 

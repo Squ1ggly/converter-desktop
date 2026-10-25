@@ -59,6 +59,8 @@ export interface MockBackendControls {
   releaseScans(): void;
   releaseCatalog(): void;
   requestWindowClose(): Promise<void>;
+  // Like ⌘Q or Quit in the macOS app menu while a conversion runs.
+  requestQuitFromMenu(): Promise<void>;
   readLog(): BackendLog;
 }
 

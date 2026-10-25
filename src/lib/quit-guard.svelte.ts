@@ -3,7 +3,10 @@ import type { ConversionRun } from "$lib/conversion-run.svelte";
 import { showError } from "$lib/errors";
 import type { FileQueue } from "$lib/queue.svelte";
 
-// Closing mid-conversion asks first. Quitting then cancels every file, so
+// Sent by the backend when ⌘Q or the macOS app menu's Quit is used mid-conversion.
+const QUIT_REQUESTED_EVENT = "quit-requested";
+
+// Closing or quitting mid-conversion asks first. Quitting then cancels every file, so
 // nothing is left half-written, and closes the window.
 export class QuitGuard {
   isDialogOpen = $state(false);
@@ -17,15 +20,31 @@ export class QuitGuard {
   }
 
   // Returns a function that stops listening.
-  async listenForClose(): Promise<() => void> {
-    const stopListening = await getCurrentWindow().onCloseRequested((event) => {
+  async listen(): Promise<() => void> {
+    const currentWindow = getCurrentWindow();
+    const stopCloseListener = await currentWindow.onCloseRequested((event) => {
       if (!this.#queue.isConverting) {
         return;
       }
       event.preventDefault();
       this.isDialogOpen = true;
     });
+    const stopQuitListener = await currentWindow.listen(QUIT_REQUESTED_EVENT, () => this.#askBeforeQuitting());
+
+    const stopListening = (): void => {
+      stopCloseListener();
+      stopQuitListener();
+    };
     return stopListening;
+  }
+
+  // The conversion may have finished by the time the request arrives; then there's nothing to ask.
+  #askBeforeQuitting(): void {
+    if (!this.#queue.isConverting) {
+      void this.#destroyWindow();
+      return;
+    }
+    this.isDialogOpen = true;
   }
 
   async quit(): Promise<void> {

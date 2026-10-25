@@ -100,6 +100,10 @@ export class MockBackend {
     await this.#page.evaluate(() => window.converterMockBackend.requestWindowClose());
   }
 
+  async requestQuitFromMenu(): Promise<void> {
+    await this.#page.evaluate(() => window.converterMockBackend.requestQuitFromMenu());
+  }
+
   async readLog(): Promise<BackendLog> {
     const backendLog = await this.#page.evaluate(() => window.converterMockBackend.readLog());
     return backendLog;

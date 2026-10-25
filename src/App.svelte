@@ -178,7 +178,7 @@
   onMount(() => {
     void initialise();
     const stopDragDropPromise = getCurrentWebview().onDragDropEvent(handleDragDrop);
-    const stopCloseGuardPromise = quitGuard.listenForClose();
+    const stopCloseGuardPromise = quitGuard.listen();
 
     return () => {
       void stopDragDropPromise.then((stopListening) => stopListening());

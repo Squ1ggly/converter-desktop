@@ -25,7 +25,8 @@ Click **Cancel**. The button shows "Cancelling" until every file has stopped.
 
 ## Closing while converting
 
-Closing the window during a conversion asks "Quit while converting?" first. **Keep converting**
+Closing the window during a conversion asks "Quit while converting?" first. On macOS, so does
+⌘Q or **Quit Converter** in the app menu. **Keep converting**
 carries on. **Quit** shows "Quitting" while it cancels the files still converting, then closes the
 window. Their unfinished output is removed.
 
