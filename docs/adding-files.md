@@ -3,12 +3,12 @@
 There are three ways to add files:
 
 - Drag files or folders onto the window. "Drop to add" appears while you drag.
-- Click **Choose files** (⌘O on macOS, Ctrl+O on Windows and Linux). The picker can filter to
+- Click **Add files** (⌘O on macOS, Ctrl+O on Windows and Linux). The picker can filter to
   images, videos or both.
-- Click **Choose folder** to add one or more folders.
+- Click **Add folder** to add one or more folders.
 
-Once the list has files in it, the toolbar shows **Add files** (the same file picker) and
-**Clear**, which empties the list. Dragging and dropping keeps working at any time.
+Once the list has files in it, **Add files** moves to the toolbar, next to **Clear**, which empties
+the list. Dragging and dropping keeps working at any time.
 
 One list can hold images and videos together. They are shown in separate groups, each with its
 own settings. See [Images](images.md) and [Videos](videos.md).

@@ -13,17 +13,17 @@ import {
 test("the empty state lists the formats the app accepts", async ({ page }) => {
   await launchConverter(page);
 
-  await expect(page.getByRole("button", { name: "Choose files" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Choose folder" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add files" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add folder" })).toBeVisible();
   await expect(page.getByRole("definition").first()).toContainText("PNG");
   await expect(page.getByRole("definition").last()).toContainText("MOV");
 });
 
-test("Choose files adds the files picked in the dialog", async ({ page }) => {
+test("Add files adds the files picked in the dialog", async ({ page }) => {
   const backend = await launchConverter(page);
   await backend.answerNextDialog([BEACH_PHOTO, HOLIDAY_VIDEO]);
 
-  await page.getByRole("button", { name: "Choose files" }).click();
+  await page.getByRole("button", { name: "Add files" }).click();
 
   await expect(fileRow(page, "beach.png")).toBeVisible();
   await expect(fileRow(page, "holiday.mov")).toBeVisible();
@@ -36,19 +36,19 @@ test("cancelling the file dialog adds nothing", async ({ page }) => {
   const backend = await launchConverter(page);
   await backend.answerNextDialog(null);
 
-  await page.getByRole("button", { name: "Choose files" }).click();
+  await page.getByRole("button", { name: "Add files" }).click();
 
   await expect.poll(async () => (await backend.readLog()).dialogs.length).toBe(1);
   await expect(page.getByText("Drop images or videos")).toBeVisible();
 });
 
-test("Choose folder adds the images and videos inside the folder", async ({ page }) => {
+test("Add folder adds the images and videos inside the folder", async ({ page }) => {
   const backend = await launchConverter(page, {
     folders: { [PICTURES_FOLDER]: [BEACH_PHOTO, CITY_PHOTO, `${PICTURES_FOLDER}/captions.txt`] },
   });
   await backend.answerNextDialog([PICTURES_FOLDER]);
 
-  await page.getByRole("button", { name: "Choose folder" }).click();
+  await page.getByRole("button", { name: "Add folder" }).click();
 
   await expect(page.getByRole("heading", { name: "2 files" })).toBeVisible();
   await expect(fileRow(page, "beach.png")).toBeVisible();

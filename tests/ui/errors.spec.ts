@@ -14,7 +14,7 @@ async function expectErrorToast(page: Page, title: string, details: string): Pro
 test("a file picker that can't open says so", async ({ page }) => {
   await launchConverter(page, { failingCommands: { "plugin:dialog|open": "No display" } });
 
-  await page.getByRole("button", { name: "Choose files" }).click();
+  await page.getByRole("button", { name: "Add files" }).click();
 
   await expectErrorToast(page, "Couldn't open the file picker", "No display");
   await expect(page.getByText("Drop images or videos")).toBeVisible();
@@ -23,7 +23,7 @@ test("a file picker that can't open says so", async ({ page }) => {
 test("a folder picker that can't open says so", async ({ page }) => {
   await launchConverter(page, { failingCommands: { "plugin:dialog|open": "No display" } });
 
-  await page.getByRole("button", { name: "Choose folder" }).click();
+  await page.getByRole("button", { name: "Add folder" }).click();
 
   await expectErrorToast(page, "Couldn't open the folder picker", "No display");
 });

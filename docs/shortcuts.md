@@ -2,7 +2,7 @@
 
 | Action | macOS | Windows and Linux |
 |---|---|---|
-| Choose files | ⌘O | Ctrl+O |
+| Add files | ⌘O | Ctrl+O |
 | Convert, or Convert again | ⌘↩ | Ctrl+Enter |
 | Open or close Settings | ⌘, | Ctrl+, |
 | Open or close Help | F1 | F1 |

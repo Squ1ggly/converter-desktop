@@ -55,7 +55,7 @@ for (const expected of PLATFORMS) {
     test("shortcut hints use this platform's keys", async ({ page }) => {
       const backend = await launchConverter(page, { platform: expected.platform });
 
-      await expect(shortcutKeysOf(page.getByRole("button", { name: "Choose files" }))).toHaveText(expected.openHint);
+      await expect(shortcutKeysOf(page.getByRole("button", { name: "Add files" }))).toHaveText(expected.openHint);
       await backend.dropFiles([BEACH_PHOTO]);
       await expect(shortcutKeysOf(convertButton(page))).toHaveText(expected.convertHint);
     });
