@@ -40,8 +40,8 @@ workflow then:
 
 1. Builds the installers for every platform.
 2. Installs each one on clean machines and checks it works (see [Installer tests](#installer-tests)).
-3. Attaches the installers, the FFmpeg source code and each FFmpeg build configuration to the
-   draft.
+3. Attaches the installers, the FFmpeg source tarball and each FFmpeg build configuration to
+   the draft.
 4. Publishes the release.
 
 If any step fails, the release stays a draft and nobody can download it. Fix the cause, then
@@ -171,7 +171,10 @@ pnpm notices
 
 ## Updating FFmpeg
 
-Update the URLs and SHA-256 checksums in `scripts/ffmpeg-builds.ts`, then run `pnpm notices`.
+Update the version, URLs and SHA-256 checksums in `scripts/ffmpeg-builds.ts`, then run
+`pnpm notices`. Every platform's build must come from the same FFmpeg release, because each
+release attaches that one source tarball. The Windows ARM64 build is a `.7z` archive, so fetching
+it needs 7-Zip (`7z`) on the `PATH`; GitHub's Windows runners have it.
 If the FFmpeg release changes, also replace `licenses/FFmpeg/` with the files from the new source
 tarball; the Installers workflow checks they match. The Installers workflow also checks each build
 was configured with `--enable-gpl --enable-version3`, which is what the notices say.
