@@ -30,7 +30,7 @@
   import { pluralise, revealInFolderLabel } from "$lib/formatting";
   import { PreferenceStore } from "$lib/preference-store.svelte";
   import { FileQueue } from "$lib/queue.svelte";
-  import { shortcutFor, type Shortcut } from "$lib/shortcuts";
+  import { UNKNOWN_PLATFORM, shortcutFor, type Shortcut } from "$lib/shortcuts";
   import type { AppView } from "$lib/views";
 
   const MAX_NAMES_IN_TOAST = 3;
@@ -48,7 +48,7 @@
   let view = $state<AppView>("converter");
   let isQuitDialogOpen = $state(false);
 
-  const platform = $derived(catalog?.platform ?? "");
+  const platform = $derived(catalog?.platform ?? UNKNOWN_PLATFORM);
   const revealLabel = $derived(revealInFolderLabel(platform));
   const imageTargetLabel = $derived(labelFor(catalog?.imageOutputs, preferenceStore.values.imageFormat));
   const videoTargetLabel = $derived(labelFor(catalog?.videoOutputs, preferenceStore.values.videoFormat));
@@ -313,6 +313,8 @@
         <p class="text-destructive p-8 text-sm select-text" role="alert">Couldn't start: {startupError}</p>
       {:else if view === "help"}
         <HelpView />
+      {:else if !catalog}
+        <BusyState label="Loading" />
       {:else if catalog && view === "settings"}
         <SettingsView {catalog} bind:preferences={preferenceStore.values} isConverting={queue.isConverting} />
       {:else if catalog && queue.isEmpty && fileAdder.isAdding}

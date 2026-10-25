@@ -12,8 +12,10 @@
   const keys = $derived(shortcutKeys(shortcut, platform));
 </script>
 
-<Kbd.Group class="ml-1 opacity-70" aria-hidden="true">
-  {#each keys as key (key)}
-    <Kbd.Root>{key}</Kbd.Root>
-  {/each}
-</Kbd.Group>
+{#if keys.length > 0}
+  <Kbd.Group class="ml-1 opacity-70" aria-hidden="true">
+    {#each keys as key (key)}
+      <Kbd.Root>{key}</Kbd.Root>
+    {/each}
+  </Kbd.Group>
+{/if}

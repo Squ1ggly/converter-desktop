@@ -7,8 +7,15 @@ const KEYS_WITH_PRIMARY_MODIFIER: Record<string, Shortcut> = {
   ",": "settings",
 };
 
+// Until the backend reports the platform, no keys are shown or handled, so
+// macOS never briefly shows Ctrl or reacts to it.
+export const UNKNOWN_PLATFORM = "";
+
 // Key labels as each OS shows them, e.g. ⌘ O on macOS and Ctrl O elsewhere.
 export function shortcutKeys(shortcut: Shortcut, platform: string): string[] {
+  if (platform === UNKNOWN_PLATFORM) {
+    return [];
+  }
   const isMac = platform === "macos";
   const modifierKey = isMac ? "⌘" : "Ctrl";
   const enterKey = isMac ? "↩" : "Enter";
@@ -29,6 +36,9 @@ function isPrimaryModifierPressed(event: KeyboardEvent, platform: string): boole
 }
 
 export function shortcutFor(event: KeyboardEvent, platform: string): Shortcut | null {
+  if (platform === UNKNOWN_PLATFORM) {
+    return null;
+  }
   if (event.key === "F1") {
     return "help";
   }
