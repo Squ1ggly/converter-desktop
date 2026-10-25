@@ -1,29 +1,35 @@
-# AGENTS.md
+# Coding rules
 
-Guidance for AI agents (and humans) working in this codebase. Read this before writing or modifying any code.
+The rules for writing and changing code in this repository. Read them before your first change.
+They apply to the TypeScript and Svelte UI and to the Rust backend. The examples are in
+TypeScript.
 
----
+## 1. Coding standards
 
-## 1. Coding Standards
+Code is read far more often than it is written. Write it for the next person who has to
+understand it.
 
-We hold a high bar for code quality. Code is read far more often than it is written — optimise for the next person (or agent) who has to understand it.
+### 1.1 DRY: don't repeat yourself
 
-### 1.1 DRY — Don't Repeat Yourself
+Every piece of knowledge has one authoritative place in the codebase.
 
-Every piece of knowledge should have a single, authoritative representation in the codebase.
-
-- If you find yourself copying a block of code, stop and extract it into a shared function, constant, or module.
-- Duplicated logic drifts. When two copies of the same rule exist, one will eventually be updated and the other forgotten.
-- This applies beyond code: duplicated config values, magic numbers, validation rules, and type definitions should all live in one place and be referenced everywhere else.
-- **However** — don't abstract prematurely. Two things that look similar today but serve different concerns may be incidental duplication. Prefer a little duplication over the wrong abstraction. The test: if the two copies _must_ change together, they should be one thing.
+- If you are about to copy a block of code, extract it into a shared function, constant or module
+  instead.
+- Duplicated logic drifts. When two copies of a rule exist, one gets updated and the other is
+  forgotten.
+- This goes beyond code: config values, magic numbers, validation rules and type definitions live
+  in one place and are referenced everywhere else.
+- Don't abstract too early. Two things that look alike today but serve different purposes are
+  incidental duplication, and a little duplication is better than the wrong abstraction. The
+  test: if the two copies must change together, they should be one thing.
 
 ```ts
-// ❌ Bad — the same discount rule lives in two places
+// Avoid: the same discount rule in two places
 const cartTotal = items.reduce((sum, item) => sum + item.price * 0.9, 0);
-// ...elsewhere...
+// In another file:
 const invoiceTotal = lines.reduce((sum, line) => sum + line.price * 0.9, 0);
 
-// ✅ Good — one source of truth
+// Prefer: one source of truth
 const MEMBER_DISCOUNT_MULTIPLIER = 0.9;
 
 function applyMemberDiscount(price: number): number {
@@ -31,78 +37,88 @@ function applyMemberDiscount(price: number): number {
 }
 ```
 
-### 1.2 Separation of Concerns
+### 1.2 Separation of concerns
 
-Each module, class, and function should have one clear responsibility.
+Each module and function has one clear responsibility.
 
-- **Keep layers apart.** Data access, business logic, and presentation should not be tangled together in one function or file. A function that fetches data, transforms it, _and_ renders it is three functions wearing a trench coat.
-- **Functions do one thing.** If you need the word "and" to describe what a function does, it probably needs splitting.
-- **Modules own a domain.** Group code by what it's _about_, not by what it _is_. Prefer `billing/` containing its own models, services, and validators over a giant shared `utils/` bucket.
-- **Side effects live at the edges.** Keep core logic pure and testable; push I/O (network, filesystem, database) to the boundaries of the system.
+- **Keep layers apart.** Data access, business logic and presentation don't share a function or
+  file. A function that fetches data, transforms it and renders it should be three functions.
+- **Functions do one thing.** If you need the word "and" to describe a function, split it.
+- **Modules own a domain.** Group code by what it is about, not by what kind of code it is. A
+  `billing/` module with its own models, services and validators beats a shared `utils/` bucket.
+- **Side effects live at the edges.** Keep core logic pure and testable. Push I/O (network,
+  filesystem, processes) to the boundaries.
 
 ```ts
-// ❌ Bad — fetching, business rules, and formatting in one place
+// Avoid: fetching, business rules and formatting in one place
 async function showUserReport(userId: string) {
   const response = await fetch(`/api/users/${userId}`);
   const user = await response.json();
   const isEligible = user.purchases > 5 && !user.suspended;
-  document.getElementById("report").innerHTML =
-    `<p>${user.name}: ${isEligible}</p>`;
+  document.getElementById("report").innerHTML = `<p>${user.name}: ${isEligible}</p>`;
 }
 
-// ✅ Good — each concern is separate and independently testable
+// Prefer: each concern is separate and testable on its own
 async function fetchUser(userId: string): Promise<User> {
-  /* data access */
+  const response = await fetch(`/api/users/${userId}`);
+  const responseBody: unknown = await response.json();
+  const user = userSchema.parse(responseBody);
+  return user;
 }
 
 function isEligibleForRewards(user: User): boolean {
-  return user.purchases > MINIMUM_PURCHASES_FOR_REWARDS && !user.suspended;
+  const hasEnoughPurchases = user.purchases > MINIMUM_PURCHASES_FOR_REWARDS;
+  const isEligible = hasEnoughPurchases && !user.suspended;
+  return isEligible;
 }
 
-function renderUserReport(user: User, isEligible: boolean): void {
-  /* presentation */
+function renderUserReport(user: User, isEligible: boolean): string {
+  const reportHtml = `<p>${user.name}: ${isEligible}</p>`;
+  return reportHtml;
 }
 ```
 
-### 1.3 No Inline Returns
+### 1.3 No complex inline returns
 
-Do not return complex expressions directly. Assign the result to a well-named variable first, then return it.
+Don't return an expression with logic in it. Assign it to a well-named variable, then return the
+variable.
 
-- A named intermediate variable documents _what_ the expression means, not just what it computes.
-- It gives you somewhere to set a breakpoint or add a log line when debugging.
-- It keeps diffs clean when the logic later needs a guard clause or transformation before returning.
+- The name documents what the expression means, not only what it computes.
+- It gives you a place for a breakpoint or a log line.
+- It keeps diffs small when the logic later needs a guard or another step before returning.
 
 ```ts
-// ❌ Bad — what does this expression represent?
+// Avoid: what does this expression represent?
 function getPrice(item: Item, user: User): number {
-  return (
-    item.basePrice * (user.isMember ? 0.9 : 1) + (item.weight > 20 ? 15 : 0)
-  );
+  return item.basePrice * (user.isMember ? 0.9 : 1) + (item.weight > 20 ? 15 : 0);
 }
 
-// ✅ Good — every step is named and inspectable
+// Prefer: every step is named and inspectable
 function getPrice(item: Item, user: User): number {
   const discountMultiplier = user.isMember ? MEMBER_DISCOUNT_MULTIPLIER : 1;
   const discountedPrice = item.basePrice * discountMultiplier;
-  const heavyItemSurcharge =
-    item.weight > HEAVY_ITEM_THRESHOLD_KG ? HEAVY_ITEM_FEE : 0;
+  const heavyItemSurcharge = item.weight > HEAVY_ITEM_THRESHOLD_KG ? HEAVY_ITEM_FEE : 0;
 
   const finalPrice = discountedPrice + heavyItemSurcharge;
   return finalPrice;
 }
 ```
 
-Simple early-exit guards (`return null;`, `return [];`, `return isValid;`) are fine — the rule targets _expressions with logic in them_, not trivial returns.
+Trivial returns (`return null;`, `return [];`, `return isValid;`) are fine. The rule is about
+expressions with logic in them.
 
-The same rule applies to **inline/single-line `if` statements** — they hide control flow and give you nowhere to add a breakpoint, a log, or a second statement later. Always use braces and a new line:
+### 1.4 Braced, multi-line if statements
+
+Single-line `if` statements hide control flow and leave no room for a breakpoint, a log or a
+second statement. Always use braces and a new line.
 
 ```ts
-// ❌ Bad — inline ifs
+// Avoid: single-line ifs
 if (!user) return null;
 if (order.isPaid) sendReceipt(order);
 else flagForReview(order);
 
-// ✅ Good — explicit, braced, and extensible
+// Prefer: braced and easy to extend
 if (!user) {
   return null;
 }
@@ -114,17 +130,20 @@ if (order.isPaid) {
 }
 ```
 
-### 1.4 Maximum Nesting Depth: 2 — Prefer Flat Code
+### 1.5 Maximum nesting depth of 2
 
-Deeply nested code is hard to read, hard to test, and hides the happy path. **Two levels of nesting is the hard ceiling. Zero or one is the goal.**
+Deep nesting is hard to read and test, and it hides the main path. Two levels is the limit. Zero
+or one is the goal.
 
-- **Use guard clauses.** Handle the invalid/edge cases first and return early, so the main logic sits at the top level instead of inside an `if` pyramid.
-- **Invert conditions to exit early** rather than wrapping the rest of the function in `if (valid) { ... }`.
-- **Extract nested blocks into named functions.** If a loop body or condition branch is complex enough to nest further, it's complex enough to deserve its own name (see 1.5).
-- **Flatten loops with array methods or continue-guards.** `filter`/`map` chains, or an early `continue` inside a loop, remove a level of nesting each.
+- **Use guard clauses.** Handle invalid and edge cases first and return early, so the main logic
+  sits at the top level.
+- **Invert conditions to exit early** instead of wrapping the rest of the function in an `if`.
+- **Extract nested blocks into named functions.** A loop body or branch complex enough to nest
+  further deserves its own name (see 1.6).
+- **Flatten loops** with `filter` and `map`, or with an early `continue`.
 
 ```ts
-// ❌ Bad — four levels deep, the actual logic is buried
+// Avoid: four levels deep, with the real work buried
 function processOrders(orders: Order[]) {
   for (const order of orders) {
     if (order.isActive) {
@@ -139,7 +158,7 @@ function processOrders(orders: Order[]) {
   }
 }
 
-// ✅ Good — guard clauses and extraction keep everything flat
+// Prefer: filtering and extraction keep it flat
 function processOrders(orders: Order[]) {
   const activeOrders = orders.filter((order) => order.isActive);
 
@@ -157,50 +176,63 @@ function shipInStockItems(order: Order) {
 }
 ```
 
-If you find yourself needing a third level of nesting, that is a signal to restructure — extract a function, add a guard clause, or rethink the data flow. Do not just indent further.
+Needing a third level is a sign to restructure: extract a function, add a guard clause or rethink
+the data flow.
 
-### 1.5 Human-Readable Names for Everything
+### 1.6 Descriptive names
 
-Names are the primary documentation. Every variable, function, class, file, and parameter should say what it is without needing a comment.
+Names are the main documentation. Every variable, function, type, file and parameter says what it
+is without a comment.
 
-- **No abbreviations or single letters** outside of tiny, conventional scopes (`i` in a short loop index is acceptable; `usrMgrSvc` never is).
-- **Booleans read as questions or states:** `isLoading`, `hasExpired`, `canRetry` — not `flag`, `check`, or `status2`.
-- **Functions are verbs, values are nouns:** `calculateInvoiceTotal()` returns `invoiceTotal`.
-- **Name the units and context:** `timeoutMs`, `distanceKm`, `retryCount` — not `timeout`, `distance`, `n`.
-- **If naming something is hard, the design is probably wrong.** A function you can't name concisely is usually doing too many things (see 1.2).
+- **No abbreviations or single letters**, except in tiny conventional scopes (`i` as a short loop
+  index is fine, `usrMgrSvc` never is).
+- **Booleans read as questions or states**: `isLoading`, `hasExpired`, `canRetry`, not `flag`,
+  `check` or `status2`.
+- **Functions are verbs, values are nouns**: `calculateInvoiceTotal()` returns `invoiceTotal`.
+- **Include units and context**: `timeoutMs`, `distanceKm`, `retryCount`, not `timeout`,
+  `distance`, `n`.
+- **If something is hard to name, the design is probably wrong.** A function you can't name
+  concisely usually does too much (see 1.2).
 
 ```ts
-// ❌ Bad
+// Avoid
 const d = new Date();
 const res = getData(u.id);
-function proc(x: any[]) {
-  /* ... */
+function proc(x: Purchase[]) {
+  return x.reduce((t, p) => t + p.amount, 0);
 }
 
-// ✅ Good
+// Prefer
 const reportGeneratedAt = new Date();
 const purchaseHistory = fetchPurchaseHistory(user.id);
-function summariseMonthlyPurchases(purchases: Purchase[]) {
-  /* ... */
+function sumPurchaseAmounts(purchases: Purchase[]) {
+  const totalAmount = purchases.reduce((runningTotal, purchase) => {
+    return runningTotal + purchase.amount;
+  }, 0);
+  return totalAmount;
 }
 ```
 
-### 1.6 Avoid `any` and `unknown` Types
+### 1.7 No `any`, and `unknown` only at trust boundaries
 
-Types are contracts. `any` deletes the contract; `unknown` defers it. Both hide bugs the compiler exists to catch.
+Types are contracts. `any` deletes the contract and `unknown` postpones it. Both hide bugs the
+compiler exists to catch.
 
-- **Never use `any`.** It silently disables type checking for everything it touches and spreads through the codebase.
-- **Avoid `unknown`** except at true trust boundaries (parsing external JSON, catch blocks) — and even there, narrow it to a concrete type immediately with a validation step or type guard.
-- **Model your data properly.** If a shape is awkward to type, define an interface, a union, or a generic. Awkwardness in typing is a design signal, not a reason to opt out.
-- Do not silence type errors with `as any`, `@ts-ignore`, or `@ts-expect-error`. Fix the underlying type instead. If a third-party library is untyped, write a minimal declaration for the parts you use.
+- **Never use `any`.** It turns off type checking for everything it touches and spreads.
+- **Use `unknown` only at trust boundaries** (parsing external JSON, `catch` blocks), and narrow it
+  to a concrete type straight away with validation or a type guard.
+- **Model the data.** If a shape is awkward to type, define an interface, a union or a generic.
+  Awkward types are a design signal, not a reason to opt out.
+- Don't silence type errors with `as any`, `@ts-ignore` or `@ts-expect-error`. Fix the type. If a
+  library has no types, write a small declaration for the parts you use.
 
 ```ts
-// ❌ Bad
+// Avoid
 function handleResponse(data: any) {
   return data.items.map((x: any) => x.name);
 }
 
-// ✅ Good
+// Prefer
 interface ProductResponse {
   items: Product[];
 }
@@ -210,26 +242,33 @@ function handleResponse(response: ProductResponse): string[] {
   return productNames;
 }
 
-// ✅ Acceptable use of unknown — narrowed immediately at a trust boundary
+// Acceptable: unknown at a trust boundary, narrowed immediately
 function parseConfig(rawJson: string): AppConfig {
   const parsed: unknown = JSON.parse(rawJson);
-  const validatedConfig = appConfigSchema.parse(parsed); // e.g. zod
+  const validatedConfig = appConfigSchema.parse(parsed);
   return validatedConfig;
 }
 ```
 
-### 1.7 Keep It Simple — Don't Over-Complicate
+### 1.8 Keep it simple
 
-Simplicity is a feature. The best solution is the most boring one that fully solves the problem. Cleverness is a cost, not an achievement.
+The best solution is the most boring one that fully solves the problem.
 
-- **Solve the problem in front of you.** Don't build for hypothetical future requirements (YAGNI). Speculative flexibility — extra config options, plugin systems, generic abstractions "in case we need them" — is complexity paid for now for value that usually never arrives.
-- **Prefer boring, obvious constructs.** A plain `if/else`, a straightforward loop, or a simple function beats a clever one-liner, a dense ternary chain, or an exotic language feature. If a reader has to pause and decode it, it's too clever.
-- **Fewer moving parts.** Every new layer, wrapper, dependency, or design pattern must earn its place. Don't add an interface with one implementation, a factory for one product, or an event system where a function call would do.
-- **Small functions, small files, small changes.** If a solution keeps growing, step back — you may be solving a harder problem than the one that was asked.
-- **Delete code gladly.** The simplest code is the code that doesn't exist. Removing complexity is as valuable as adding features.
+- **Solve the problem in front of you.** Don't build for hypothetical requirements. Extra
+  options, plugin systems and generic abstractions added in case they're needed cost now and
+  rarely pay off.
+- **Prefer obvious constructs.** A plain `if`/`else`, a straightforward loop or a small function
+  beats a clever one-liner, a chain of ternaries or an unusual language feature. If a reader has
+  to stop and decode it, it's too clever.
+- **Fewer moving parts.** Every new layer, wrapper, dependency or pattern has to earn its place.
+  No interface with one implementation, factory for one product, or event system where a
+  function call would do.
+- **Small functions, small files, small changes.** If a solution keeps growing, step back and
+  check you are solving the problem that was asked.
+- **Delete code gladly.** Removing complexity is as valuable as adding features.
 
 ```ts
-// ❌ Bad — clever, dense, and over-engineered for what it does
+// Avoid: dense and hard to follow
 const getStatus = (u: User) =>
   u?.subscription?.tier
     ? u.subscription.tier === "pro" || u.subscription.expiresAt > Date.now()
@@ -237,7 +276,7 @@ const getStatus = (u: User) =>
       : "lapsed"
     : "none";
 
-// ✅ Good — boring, flat, and obvious
+// Prefer: flat and obvious
 function getSubscriptionStatus(user: User): SubscriptionStatus {
   if (!user.subscription) {
     return "none";
@@ -254,56 +293,118 @@ function getSubscriptionStatus(user: User): SubscriptionStatus {
 }
 ```
 
-The test for every change: **could a new team member read this cold and understand it in one pass?** If not, simplify.
+The test for every change: could someone new to the project read it once and understand it?
 
----
+## 2. Workflow
 
-## 2. Workflow: Explore Before You Act
+### 2.1 Explore before acting
 
-Do not start writing code the moment you receive a task. Understanding the codebase first prevents duplicated work, broken conventions, and misplaced changes.
+Understand the code before changing it.
 
-### 2.1 Understand the Project First
+1. **Read the relevant code paths**: the files involved, the callers of what you are changing, and
+   the module around it.
+2. **Learn the conventions.** Match how this project structures modules, names things, handles
+   errors and writes tests.
+3. **Check whether it already exists.** Search for a helper, component or service before writing
+   a new one. Reinventing one breaks DRY (1.1) at the project level.
+4. **Trace, don't assume.** Follow imports and references to see how data flows and where
+   something is used.
+5. **Make the smallest change that solves the problem.** Prefer targeted edits to rewrites,
+   unless restructuring is the task.
+6. **Respect doc comments.** Don't use anything marked `@deprecated` or `#[deprecated]`.
 
-Before making any change:
+### 2.2 Avoid huge bespoke scripts
 
-1. **Read the relevant code paths.** Find the files involved in the task and read them properly — not just the function you're changing, but its callers and the module around it.
-2. **Learn the existing conventions.** How does this project structure modules? Name things? Handle errors? Write tests? Match the established patterns rather than importing your own.
-3. **Check whether it already exists.** Search for existing utilities, helpers, or services before writing new ones. Reinventing an existing helper violates DRY (1.1) at the project level.
-4. **Trace, don't assume.** If you're unsure how data flows or where something is used, follow the imports and references. Guessing at behaviour leads to changes that compile but break things.
-5. **Make the smallest change that solves the problem.** Prefer targeted edits within existing structures over rewrites and reorganisations, unless restructuring is the actual task.
-6. **Respect jsDocs** Eg if a function is marked as @deprecated, don't use it.
+- **Use existing tooling first**: the `package.json` scripts, pnpm, Cargo, the test runners and
+  the CLIs the project already uses.
+- **Work in small steps.** A few short commands you can check as you go beat one long script that
+  fails as a black box.
+- **Logic worth keeping belongs in the codebase**, placed, named, typed and tested, not in a
+  throwaway script.
+- **Edit by hand when that is smaller.** Don't write a script to change three files.
+- If a substantial script is really needed, explain why first, keep it minimal and remove it
+  afterwards.
 
-### 2.2 Avoid Huge Bespoke Scripts
+## 3. Dependencies
 
-Do not solve problems by generating large, one-off scripts when smaller, standard approaches exist.
+Add dependencies with the package manager so you get the latest stable version. Don't type
+version numbers into `package.json` or `Cargo.toml` by hand. Pin a specific version only when
+there is a stated reason.
 
-- **Prefer existing tooling.** Use the project's own scripts, package manager commands, test runner, linter, and CLI tools before writing anything custom. Check `package.json` scripts, `Makefile`, or equivalent first.
-- **Prefer small, composable steps.** A few short, verifiable commands are better than one 300-line script that does everything invisibly. Small steps can be checked as you go; a monolithic script fails as a black box.
-- **Don't script what should be code.** If logic is worth keeping, it belongs in the codebase — properly placed, named, typed, and tested — not in a throwaway script.
-- **Don't script what should be manual.** For a one-time, three-file change, just edit the three files. Writing a script to automate a task smaller than the script itself is wasted effort and added risk.
-- If a substantial script is genuinely necessary, explain why first, keep it minimal, and clean it up afterwards.
+| Kind | Command |
+|---|---|
+| UI or tooling package | `pnpm add <package>`, or `pnpm add -D <package>` for development only |
+| Rust crate | `cargo add <crate>`, run in `src-tauri/` |
 
-## 3 Dependencies
+pnpm is the only JavaScript package manager. Don't use npm, yarn or bun. Commit the updated
+`pnpm-lock.yaml` or `src-tauri/Cargo.lock` with the change.
 
-### 3.1 Use the latest stable version when adding packages
+## 4. This project
 
-DO NOT add dependencies to the `package.json` by editing the text and hallucinating a version number.
+### 4.1 Checks before a pull request
 
-DO use `npm i` to add packages so we get the latest stable version. Only install a specific version if directed to do so.
+Run these from the repository root. Run `pnpm fetch-ffmpeg` once first, because the Rust tests
+convert real files with the bundled FFmpeg.
 
----
+```bash
+pnpm check
+pnpm test:ui
+cargo fmt --manifest-path src-tauri/Cargo.toml --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
+```
 
-## 4. Quick Checklist
+All of them must pass with no errors or warnings. CI runs the same checks on Linux, macOS and
+Windows, and the end-to-end tests on Linux and Windows. See [Testing](CONTRIBUTING.md#testing).
 
-Before submitting any change, confirm:
+- Add tests with every change, at the level that fits: Rust unit or conversion tests, UI tests
+  or end-to-end tests.
+- When a test fails because of a bug, fix the app. Never weaken or skip an assertion.
+- Production code never panics or calls `unwrap` on user-controlled input. Errors carry short
+  messages a user can act on.
 
-- [ ] I explored the relevant code and followed existing conventions
-- [ ] No logic or values are duplicated — shared code is extracted
-- [ ] Each function/module has a single, clear responsibility
-- [ ] No complex expressions are returned inline — results are named first
-- [ ] No inline/single-line `if` statements — all branches are braced
-- [ ] Nesting never exceeds 2 levels — guard clauses and extraction keep code flat
-- [ ] Every name is descriptive, unabbreviated, and self-explanatory
-- [ ] No `any`; `unknown` only at trust boundaries and narrowed immediately
-- [ ] The solution is the simplest one that works — no speculative abstractions or clever tricks
-- [ ] I didn't write a large bespoke script where existing tools or small steps would do
+### 4.2 Documentation
+
+- The pages in `docs/` are also rendered in the app's Help page (`src/lib/guide.ts`), so every
+  link must work both on GitHub and in the app.
+- Link with relative paths to `.md` files, for example `[Saving](saving.md#file-names)`. Links
+  between user guide pages open in the app. Links outside `docs/` open on GitHub in the browser.
+- Help only shows the pages listed in `PAGE_ORDER` in `src/lib/guide.ts`. Add a new user guide
+  page there too.
+- Update the docs in the same change as the behaviour they describe.
+
+### 4.3 UI
+
+- Use [shadcn-svelte](https://shadcn-svelte.com) components. Add one with
+  `pnpm exec shadcn-svelte add <component>` rather than writing your own.
+- Use [Lucide](https://lucide.dev) icons from `@lucide/svelte`. No hand-drawn SVG icons.
+- Style with Tailwind and the shadcn theme tokens. No colours outside the tokens.
+- Keep the generated files in `src/lib/components/ui/` as the CLI wrote them.
+
+### 4.4 User-facing copy
+
+Applies to UI text, error messages and the docs.
+
+- Short, plain sentences. No filler, no marketing tone, no "simply", "just" or "easily".
+- No ellipses and no emoji. Write "Choose files", not "Choose files" followed by an ellipsis.
+- Sentence case for headings, buttons and labels.
+- In the docs, use the exact labels the UI shows, in bold.
+- Errors say what went wrong and, where possible, what to do next.
+
+## 5. Checklist
+
+Before opening a pull request, confirm:
+
+- [ ] I explored the relevant code and followed its conventions
+- [ ] No logic or values are duplicated
+- [ ] Each function and module has one clear responsibility
+- [ ] No complex expressions are returned inline
+- [ ] Every `if` is braced and multi-line
+- [ ] Nesting never goes deeper than 2 levels
+- [ ] Every name is descriptive and unabbreviated
+- [ ] No `any`, and `unknown` only at trust boundaries, narrowed immediately
+- [ ] The solution is the simplest one that works
+- [ ] I used existing tools and small steps, not a large one-off script
+- [ ] New dependencies were added with `pnpm add` or `cargo add`
+- [ ] The checks in 4.1 pass, and tests cover the change
+- [ ] Docs are updated and their links work on GitHub and in the app
