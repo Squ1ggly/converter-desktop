@@ -1,3 +1,4 @@
+mod color;
 mod decode;
 mod encode;
 mod geometry;

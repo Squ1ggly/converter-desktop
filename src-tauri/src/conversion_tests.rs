@@ -766,3 +766,115 @@ async fn svg_transparency_keeps_its_colour() {
     assert_eq!(pixel[0], 255, "colour was premultiplied: {pixel:?}");
     assert!((127..=128).contains(&pixel[3]), "alpha: {pixel:?}");
 }
+
+fn display_p3_profile() -> Vec<u8> {
+    moxcms::ColorProfile::new_display_p3().encode().unwrap()
+}
+
+fn write_display_p3_sample(path: &Path, format: image::ImageFormat) {
+    write_tagged_sample(path, format, &display_p3_profile());
+}
+
+fn write_tagged_sample(path: &Path, format: image::ImageFormat, icc_profile: &[u8]) {
+    use image::ImageEncoder;
+    use image::codecs::jpeg::JpegEncoder;
+    use image::codecs::png::PngEncoder;
+
+    let pixels = image::RgbImage::from_pixel(16, 16, image::Rgb([204, 102, 51]));
+    let mut file = std::fs::File::create(path).unwrap();
+    if format == image::ImageFormat::Png {
+        let mut encoder = PngEncoder::new(&mut file);
+        encoder.set_icc_profile(icc_profile.to_vec()).unwrap();
+        encoder
+            .write_image(&pixels, 16, 16, image::ExtendedColorType::Rgb8)
+            .unwrap();
+    } else {
+        let mut encoder = JpegEncoder::new_with_quality(&mut file, 100);
+        encoder.set_icc_profile(icc_profile.to_vec()).unwrap();
+        encoder
+            .write_image(&pixels, 16, 16, image::ExtendedColorType::Rgb8)
+            .unwrap();
+    }
+}
+
+// Display P3 (204, 102, 51) is about (219, 94, 31) in sRGB. Copying the
+// numbers without converting them is what makes P3 photos look washed out.
+#[tokio::test(flavor = "multi_thread")]
+async fn display_p3_photos_are_converted_to_srgb() {
+    let directory = tempfile::tempdir().unwrap();
+
+    for format in [image::ImageFormat::Png, image::ImageFormat::Jpeg] {
+        let input_path = directory
+            .path()
+            .join(format!("p3.{}", format.extensions_str()[0]));
+        write_display_p3_sample(&input_path, format);
+
+        let output_path = convert_image_to(
+            &input_path,
+            ImageFormat::Png,
+            ResizeOption::Original,
+            directory.path(),
+        )
+        .await
+        .unwrap();
+
+        let pixel = image::open(&output_path)
+            .unwrap()
+            .to_rgb8()
+            .get_pixel(8, 8)
+            .0;
+        let expected = [219, 94, 31];
+        let is_close = pixel
+            .iter()
+            .zip(expected)
+            .all(|(channel, expected_channel)| channel.abs_diff(expected_channel) <= 3);
+        assert!(
+            is_close,
+            "{format:?}: got {pixel:?}, expected about {expected:?}"
+        );
+    }
+}
+
+// HEIC is read through FFmpeg, which carries the profile into its PNG. The
+// sample uses macOS's own Display P3 profile, as iPhone photos do; `sips`
+// treats other profiles as untagged.
+#[cfg(target_os = "macos")]
+#[tokio::test(flavor = "multi_thread")]
+async fn display_p3_heic_photos_are_converted_to_srgb() {
+    let directory = tempfile::tempdir().unwrap();
+    let png_path = directory.path().join("p3.png");
+    let apple_display_p3 =
+        std::fs::read("/System/Library/ColorSync/Profiles/Display P3.icc").unwrap();
+    write_tagged_sample(&png_path, image::ImageFormat::Png, &apple_display_p3);
+    let heic_path = directory.path().join("p3.heic");
+    let sips_status = std::process::Command::new("/usr/bin/sips")
+        .args(["-s", "format", "heic", "-s", "formatOptions", "100"])
+        .arg(&png_path)
+        .arg("--out")
+        .arg(&heic_path)
+        .output()
+        .unwrap()
+        .status;
+    assert!(sips_status.success());
+
+    let output_path = convert_image_to(
+        &heic_path,
+        ImageFormat::Png,
+        ResizeOption::Original,
+        directory.path(),
+    )
+    .await
+    .unwrap();
+
+    let pixel = image::open(&output_path)
+        .unwrap()
+        .to_rgb8()
+        .get_pixel(8, 8)
+        .0;
+    let expected = [219, 94, 31];
+    let is_close = pixel
+        .iter()
+        .zip(expected)
+        .all(|(channel, expected_channel)| channel.abs_diff(expected_channel) <= 6);
+    assert!(is_close, "got {pixel:?}, expected about {expected:?}");
+}

@@ -37,6 +37,7 @@ image = { version = "0.25.10", default-features = false, features = ["png", "jpe
 tauri-plugin-store = "2.5.0"
 tauri-plugin-single-instance = "2.5.4"
 dunce = "1.0.5"
+moxcms = "0.9.1"
 
 [dev-dependencies]
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "time", "macros"] }

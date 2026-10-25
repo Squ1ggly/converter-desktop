@@ -11,6 +11,7 @@ use image::{DynamicImage, ImageDecoder, ImageReader, Limits, RgbaImage};
 use resvg::{tiny_skia, usvg};
 use tokio_util::sync::CancellationToken;
 
+use super::color::convert_to_srgb;
 use super::geometry::{
     Dimensions, MAX_IMAGE_PIXELS, ensure_source_fits, ensure_target_fits, target_dimensions,
     whole_pixels,
@@ -100,7 +101,8 @@ async fn decode_raster(
     Ok(decoded_image)
 }
 
-// Applies the EXIF orientation so phone photos aren't saved sideways.
+// Applies the EXIF orientation so phone photos aren't saved sideways, and
+// converts colours to sRGB.
 fn decode_with_image_crate(input_path: &Path) -> ConversionResult<DynamicImage> {
     let mut reader = ImageReader::open(input_path)?.with_guessed_format()?;
     reader.limits(decode_limits());
@@ -108,8 +110,10 @@ fn decode_with_image_crate(input_path: &Path) -> ConversionResult<DynamicImage> 
     let (width, height) = decoder.dimensions();
     ensure_source_fits(Dimensions { width, height })?;
     let orientation = decoder.orientation()?;
+    let icc_profile = decoder.icc_profile()?;
 
-    let mut image = DynamicImage::from_decoder(decoder).map_err(describe_decode_error)?;
+    let decoded_image = DynamicImage::from_decoder(decoder).map_err(describe_decode_error)?;
+    let mut image = convert_to_srgb(decoded_image, icc_profile.as_deref());
     image.apply_orientation(orientation);
     Ok(image)
 }

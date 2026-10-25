@@ -51,6 +51,13 @@ of using up the computer's memory.
 PNG, WebP, AVIF and TIFF keep transparent areas. JPG, BMP and PDF can't store transparency, so
 transparent areas become white, as they would in an image editor.
 
+## Colour
+
+Photos with a colour profile, such as the Display P3 profile of iPhone and many camera photos,
+are converted to standard sRGB colours as they are read. Converted files have no colour profile,
+so they look the same in every app and browser. Without this step, P3 photos would look dull.
+Greyscale and CMYK profiles are not converted.
+
 ## Rotation
 
 When a JPG, PNG, WebP or TIFF has an EXIF orientation tag, as most phone photos do, the image is

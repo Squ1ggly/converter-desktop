@@ -37,7 +37,7 @@ Every image goes through decode, resize and encode, so any input can become any 
 
 | Step | How |
 |---|---|
-| Decode | The `image` crate (JPG, PNG, WebP, GIF, BMP, TIFF), applying EXIF orientation. `resvg` for SVG, `hayro` for the first page of a PDF. FFmpeg for HEIC, HEIF and AVIF, and as a fallback for misnamed files. |
+| Decode | The `image` crate (JPG, PNG, WebP, GIF, BMP, TIFF), applying EXIF orientation and converting colours to sRGB with `moxcms` (`color.rs`). `resvg` for SVG, `hayro` for the first page of a PDF. FFmpeg for HEIC, HEIF and AVIF, and as a fallback for misnamed files. |
 | Resize | Lanczos3. SVG and PDF are rendered straight at the target size instead. |
 | Encode | The `image` crate for JPG, PNG, GIF, BMP and TIFF. FFmpeg for WebP (`libwebp`) and AVIF (`libaom-av1`). `pdf-writer` for PDF. `vtracer` for SVG. macOS `sips` for HEIC. |
 
