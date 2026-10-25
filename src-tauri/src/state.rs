@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use tokio_util::sync::CancellationToken;
 
@@ -23,26 +23,19 @@ pub struct ActiveBatches {
 impl ActiveBatches {
     pub fn start(&self, batch_id: &str) -> CancellationToken {
         let cancellation = CancellationToken::new();
-        self.lock()
+        lock_ignoring_poison(&self.cancellation_tokens)
             .insert(batch_id.to_string(), cancellation.clone());
         cancellation
     }
 
     pub fn finish(&self, batch_id: &str) {
-        self.lock().remove(batch_id);
+        lock_ignoring_poison(&self.cancellation_tokens).remove(batch_id);
     }
 
     pub fn cancel(&self, batch_id: &str) {
-        if let Some(cancellation) = self.lock().get(batch_id) {
+        if let Some(cancellation) = lock_ignoring_poison(&self.cancellation_tokens).get(batch_id) {
             cancellation.cancel();
         }
-    }
-
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, CancellationToken>> {
-        // A panic can't leave this map inconsistent, so ignore poisoning.
-        self.cancellation_tokens
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -54,16 +47,18 @@ pub struct ProducedOutputs {
 
 impl ProducedOutputs {
     pub fn remember(&self, path: &Path) {
-        self.lock().insert(path.to_path_buf());
+        lock_ignoring_poison(&self.paths).insert(path.to_path_buf());
     }
 
     pub fn contains(&self, path: &Path) -> bool {
-        self.lock().contains(path)
+        lock_ignoring_poison(&self.paths).contains(path)
     }
+}
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashSet<PathBuf>> {
-        self.paths
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-    }
+// Every value guarded here is replaced in one step, so a panic elsewhere can't
+// leave it half-updated and poisoning can be ignored.
+fn lock_ignoring_poison<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
