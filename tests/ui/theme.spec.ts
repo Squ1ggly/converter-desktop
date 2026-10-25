@@ -1,4 +1,4 @@
-import { expect, launchConverter, test } from "./support/converter";
+import { expect, launchConverter, openConverter, test } from "./support/converter";
 
 // Only errors may use colour; every other token is a shade of grey.
 const COLOURED_TOKENS = new Set(["--destructive"]);
@@ -29,3 +29,38 @@ test("every theme colour token is neutral in light and dark", async ({ page }) =
   });
   expect(nonNeutralTokens).toEqual([]);
 });
+
+interface EarlyThemeCase {
+  savedMode: string | null;
+  systemScheme: "light" | "dark";
+  isDark: boolean;
+}
+
+const EARLY_THEME_CASES: EarlyThemeCase[] = [
+  { savedMode: null, systemScheme: "dark", isDark: true },
+  { savedMode: null, systemScheme: "light", isDark: false },
+  { savedMode: "system", systemScheme: "dark", isDark: true },
+  { savedMode: "dark", systemScheme: "light", isDark: true },
+  { savedMode: "light", systemScheme: "dark", isDark: false },
+];
+
+// Runs only index.html's own script, so the theme is known before the app's code loads.
+for (const themeCase of EARLY_THEME_CASES) {
+  test(`the ${themeCase.savedMode ?? "default"} theme with a ${themeCase.systemScheme} system is set before the app loads`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: themeCase.systemScheme });
+    await page.addInitScript((savedMode) => {
+      if (savedMode !== null) {
+        localStorage.setItem("mode-watcher-mode", savedMode);
+      }
+    }, themeCase.savedMode);
+    await page.route("**/src/main.ts", (route) => route.abort());
+
+    await openConverter(page);
+
+    const html = page.locator("html");
+    const expectedClass = themeCase.isDark ? /\bdark\b/ : /^(?!.*\bdark\b)/;
+    await expect(html).toHaveClass(expectedClass);
+  });
+}
