@@ -321,6 +321,7 @@ These crates are compiled into the app.
 | [miniz_oxide](https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide) | 0.9.1 | MIT OR Zlib OR Apache-2.0 |
 | [mio](https://github.com/tokio-rs/mio) | 1.2.4 | MIT |
 | [moxcms](https://github.com/awxkee/moxcms.git) | 0.8.1 | BSD-3-Clause OR Apache-2.0 |
+| [moxcms](https://github.com/awxkee/moxcms.git) | 0.9.1 | BSD-3-Clause OR Apache-2.0 |
 | [muda](https://github.com/tauri-apps/muda) | 0.20.0 | Apache-2.0 OR MIT |
 | [new_debug_unreachable](https://github.com/mbrubeck/rust-debug-unreachable) | 1.0.6 | MIT |
 | [num_threads](https://github.com/jhpratt/num_threads) | 0.1.8 | MIT OR Apache-2.0 |
@@ -10340,7 +10341,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ````
 
-### moxcms 0.8.1, pic-scale 0.7.12, pxfm 0.1.30
+### moxcms 0.8.1, moxcms 0.9.1, pic-scale 0.7.12, pxfm 0.1.30
 
 ````text
 Apache License
@@ -10546,7 +10547,7 @@ Apache License
    limitations under the License.
 ````
 
-### moxcms 0.8.1, pic-scale 0.7.12, pxfm 0.1.30
+### moxcms 0.8.1, moxcms 0.9.1, pic-scale 0.7.12, pxfm 0.1.30
 
 ````text
 Copyright (c) Radzivon Bartoshyk. All rights reserved.
