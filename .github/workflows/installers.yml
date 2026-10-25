@@ -1,0 +1,266 @@
+name: Installers
+
+# Builds the installers for every platform, installs each one on clean machines and checks the
+# app and its FFmpeg work. The Release workflow calls this before publishing a release.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/installers.yml
+      - .github/actions/**
+      - scripts/fetch-ffmpeg.ts
+      - scripts/ffmpeg-builds.ts
+      - scripts/smoke-tests/**
+      - src-tauri/tauri.conf.json
+      - src-tauri/Cargo.toml
+      - src-tauri/Cargo.lock
+      - src-tauri/icons/**
+      - rust-toolchain.toml
+      - licenses/**
+      - THIRD-PARTY-NOTICES.md
+      - package.json
+      - pnpm-lock.yaml
+      - vite.config.ts
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      sign:
+        description: Sign and notarise the installers with the repository's signing secrets, if they exist
+        type: boolean
+        default: false
+
+concurrency:
+  group: installers-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+          - target: aarch64-pc-windows-msvc
+            runner: windows-11-arm
+          # Built on Ubuntu 22.04 so the packages need no newer glibc than 2.35, which the bundled
+          # FFmpeg needs anyway.
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            container: ubuntu:22.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            container: ubuntu:22.04
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    timeout-minutes: 60
+    env:
+      TARGET: ${{ matrix.target }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y build-essential curl file git libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup
+
+      - name: Download the bundled FFmpeg
+        run: pnpm fetch-ffmpeg --target "$TARGET"
+
+      - name: Record the FFmpeg build configuration
+        run: |
+          ffmpeg_path="src-tauri/binaries/converter-ffmpeg-$TARGET$([[ $TARGET == *windows* ]] && echo .exe || true)"
+          mkdir -p installers
+          buildconf_path="installers/ffmpeg-buildconf-$TARGET.txt"
+          { "$ffmpeg_path" -version; echo; "$ffmpeg_path" -hide_banner -buildconf; } > "$buildconf_path"
+          cat "$buildconf_path"
+          # THIRD-PARTY-NOTICES.md says the builds are GPL version 3 or later.
+          grep -q -- "--enable-gpl" "$buildconf_path"
+          grep -q -- "--enable-version3" "$buildconf_path"
+
+      - name: Set up the Apple notarisation key
+        if: runner.os == 'macOS' && inputs.sign
+        env:
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          if [ -n "$APPLE_API_PRIVATE_KEY" ]; then
+            key_path="$RUNNER_TEMP/AuthKey.p8"
+            printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$key_path"
+            echo "APPLE_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up Windows signing
+        if: runner.os == 'Windows' && inputs.sign
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL || 'http://timestamp.digicert.com' }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARTIFACT_SIGNING_ENDPOINT: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          ARTIFACT_SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          ARTIFACT_SIGNING_PROFILE: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+        run: ./scripts/release/windows-signing-config.ps1
+
+      - name: Build the installers
+        env:
+          APPLE_CERTIFICATE: ${{ inputs.sign && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ inputs.sign && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ inputs.sign && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_API_ISSUER: ${{ inputs.sign && secrets.APPLE_API_ISSUER || '' }}
+          APPLE_API_KEY: ${{ inputs.sign && secrets.APPLE_API_KEY || '' }}
+          APPLE_ID: ${{ inputs.sign && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ inputs.sign && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ inputs.sign && secrets.APPLE_TEAM_ID || '' }}
+          AZURE_CLIENT_ID: ${{ inputs.sign && secrets.AZURE_CLIENT_ID || '' }}
+          AZURE_CLIENT_SECRET: ${{ inputs.sign && secrets.AZURE_CLIENT_SECRET || '' }}
+          AZURE_TENANT_ID: ${{ inputs.sign && secrets.AZURE_TENANT_ID || '' }}
+        run: bash scripts/release/build-installers.sh
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installers-${{ matrix.target }}
+          path: installers/
+          if-no-files-found: error
+          retention-days: 14
+
+  ffmpeg-sources:
+    name: FFmpeg sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup
+
+      - name: Download the FFmpeg sources
+        run: pnpm fetch-ffmpeg --sources ffmpeg-sources
+
+      - name: Check the bundled licence files match the FFmpeg source
+        run: |
+          release_tarball=$(find ffmpeg-sources -name 'ffmpeg-*.tar.xz')
+          release_directory=$(basename "$release_tarball" .tar.xz)
+          for licence_file in COPYING.GPLv3 LICENSE.md; do
+            tar -xJOf "$release_tarball" "$release_directory/$licence_file" | cmp - "licenses/FFmpeg/$licence_file"
+          done
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ffmpeg-sources
+          path: ffmpeg-sources/
+          if-no-files-found: error
+          retention-days: 14
+
+  macos:
+    name: Install on macOS (${{ matrix.arch }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: Apple Silicon
+            runner: macos-latest
+            target: aarch64-apple-darwin
+          - arch: Intel
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installers-${{ matrix.target }}
+          path: installers
+
+      - name: Install and run the app
+        run: sh scripts/smoke-tests/macos.sh installers/*.dmg
+
+  windows:
+    name: Install on Windows ${{ matrix.machine }} (${{ matrix.target }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - machine: x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - machine: ARM64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+          # The x64 build under emulation, for ARM64 PCs that get it from an x64 download.
+          - machine: ARM64
+            runner: windows-11-arm
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installers-${{ matrix.target }}
+          path: installers
+
+      - name: Install and run the app with the NSIS installer
+        run: ./scripts/smoke-tests/windows.ps1 (Get-Item installers/*-setup.exe).FullName
+
+      - name: Install and run the app with the MSI installer
+        run: ./scripts/smoke-tests/windows.ps1 (Get-Item installers/*.msi).FullName
+
+  linux:
+    name: Install on ${{ matrix.image }} (${{ matrix.arch }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, arm64]
+        image: [ubuntu:22.04, ubuntu:24.04, debian:12, debian:13, fedora:40, fedora:latest, opensuse/leap:15.6]
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.image }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: installers-${{ matrix.target }}
+          path: installers
+
+      - name: Install and run the app
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          case "$IMAGE" in
+            ubuntu:* | debian:*) package_extension=deb ;;
+            *) package_extension=rpm ;;
+          esac
+          sh scripts/smoke-tests/linux.sh installers/*."$package_extension"
