@@ -61,7 +61,8 @@ Greyscale and CMYK profiles are not converted.
 ## Rotation
 
 When a JPG, PNG, WebP or TIFF has an EXIF orientation tag, as most phone photos do, the image is
-rotated to match. The converted file is upright without relying on the tag.
+rotated to match. HEIC, HEIF and AVIF files are turned the same way from their own rotation and
+mirroring settings or their EXIF tag. The converted file is upright without relying on any tag.
 
 ## Notes by format
 

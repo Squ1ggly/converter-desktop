@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use crate::error::ConversionError;
 use crate::ffmpeg::Ffmpeg;
 use crate::formats::{ImageFormat, VideoFormat};
+use crate::heif_test_files::{Transform, with_transforms};
 use crate::image_conversion::{ImageConversion, convert_image};
 use crate::options::{ImageOptions, ResizeOption, VideoOptions, VideoQuality};
 use crate::video_conversion::{VideoConversion, convert_video};
@@ -877,4 +878,223 @@ async fn display_p3_heic_photos_are_converted_to_srgb() {
         .zip(expected)
         .all(|(channel, expected_channel)| channel.abs_diff(expected_channel) <= 6);
     assert!(is_close, "got {pixel:?}, expected about {expected:?}");
+}
+
+// 64 × 32 grey with a red 16 × 8 block in the top-left corner, so every
+// rotation and mirror puts the block somewhere different.
+fn corner_marked_image(is_transparent: bool) -> RgbaImage {
+    let background_alpha = if is_transparent { 128 } else { 255 };
+    RgbaImage::from_fn(64, 32, |x, y| {
+        if x < 16 && y < 8 {
+            Rgba([230, 20, 20, 255])
+        } else {
+            Rgba([128, 128, 128, background_alpha])
+        }
+    })
+}
+
+fn write_corner_marked_png(path: &Path, is_transparent: bool) {
+    corner_marked_image(is_transparent).save(path).unwrap();
+}
+
+// EXIF orientation 6: turn 90° clockwise to display, as phones tag photos
+// taken in portrait.
+fn write_corner_marked_png_tagged_portrait(path: &Path) {
+    use image::ImageEncoder;
+
+    // A little-endian TIFF header and one entry: Orientation (0x0112), SHORT, 6.
+    let exif = vec![
+        b'I', b'I', 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let mut file = std::fs::File::create(path).unwrap();
+    let mut encoder = image::codecs::png::PngEncoder::new(&mut file);
+    encoder.set_exif_metadata(exif).unwrap();
+    encoder
+        .write_image(
+            &corner_marked_image(false),
+            64,
+            32,
+            image::ExtendedColorType::Rgba8,
+        )
+        .unwrap();
+}
+
+fn red_corner(image: &RgbaImage) -> &'static str {
+    let (width, height) = image.dimensions();
+    let corners = [
+        ("top left", 1, 1),
+        ("top right", width - 2, 1),
+        ("bottom left", 1, height - 2),
+        ("bottom right", width - 2, height - 2),
+    ];
+    let red_corners: Vec<&str> = corners
+        .into_iter()
+        .filter(|(_, x, y)| {
+            let [red, green, _, _] = image.get_pixel(*x, *y).0;
+            red > 180 && green < 90
+        })
+        .map(|(name, _, _)| name)
+        .collect();
+    assert_eq!(red_corners.len(), 1, "red corners: {red_corners:?}");
+    red_corners[0]
+}
+
+async fn write_avif(ffmpeg: &Ffmpeg, png_path: &Path, avif_path: &Path, has_alpha: bool) {
+    let png_text = png_path.to_string_lossy().into_owned();
+    let avif_text = avif_path.to_string_lossy().into_owned();
+    let mut arguments = vec!["-i", png_text.as_str()];
+    if has_alpha {
+        arguments.extend([
+            "-filter_complex",
+            "[0:v]format=yuva444p,split[color][alpha_source];[alpha_source]alphaextract[alpha]",
+            "-map",
+            "[color]",
+            "-map",
+            "[alpha]",
+        ]);
+    }
+    arguments.extend([
+        "-c:v",
+        "libaom-av1",
+        "-still-picture",
+        "1",
+        "-crf",
+        "10",
+        "-f",
+        "avif",
+        avif_text.as_str(),
+    ]);
+    run_ffmpeg(ffmpeg, &arguments).await;
+}
+
+async fn converted_orientation(input_path: &Path, directory: &Path) -> ((u32, u32), &'static str) {
+    let output_path = convert_image_to(
+        input_path,
+        ImageFormat::Png,
+        ResizeOption::Original,
+        directory,
+    )
+    .await
+    .unwrap_or_else(|error| panic!("{} failed: {error}", input_path.display()));
+    let output_image = image::open(&output_path).unwrap().to_rgba8();
+    (output_image.dimensions(), red_corner(&output_image))
+}
+
+const ORIENTATION_CASES: [(&[Transform], (u32, u32), &str); 4] = [
+    (
+        &[Transform::Rotate { quarter_turns: 1 }],
+        (32, 64),
+        "bottom left",
+    ),
+    (&[Transform::Mirror { axis: 0 }], (64, 32), "bottom left"),
+    (&[Transform::Mirror { axis: 1 }], (64, 32), "top right"),
+    (
+        &[
+            Transform::Rotate { quarter_turns: 1 },
+            Transform::Mirror { axis: 1 },
+        ],
+        (32, 64),
+        "bottom right",
+    ),
+];
+
+#[tokio::test(flavor = "multi_thread")]
+async fn avif_rotation_and_mirroring_are_applied() {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let directory = tempfile::tempdir().unwrap();
+
+    for has_alpha in [false, true] {
+        let png_path = directory.path().join("corner.png");
+        write_corner_marked_png(&png_path, has_alpha);
+        let avif_path = directory.path().join("corner.avif");
+        write_avif(&ffmpeg, &png_path, &avif_path, has_alpha).await;
+        let avif_bytes = std::fs::read(&avif_path).unwrap();
+
+        for (index, (transforms, expected_size, expected_corner)) in
+            ORIENTATION_CASES.into_iter().enumerate()
+        {
+            let oriented_path = directory
+                .path()
+                .join(format!("oriented-{index}-{has_alpha}.avif"));
+            std::fs::write(&oriented_path, with_transforms(&avif_bytes, transforms)).unwrap();
+
+            let (size, corner) = converted_orientation(&oriented_path, directory.path()).await;
+
+            assert_eq!(
+                (size, corner),
+                (expected_size, expected_corner),
+                "{transforms:?}, alpha {has_alpha}"
+            );
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test(flavor = "multi_thread")]
+async fn heic_rotation_and_mirroring_are_applied() {
+    let directory = tempfile::tempdir().unwrap();
+    let png_path = directory.path().join("corner.png");
+    write_corner_marked_png(&png_path, false);
+    let heic_path = directory.path().join("corner.heic");
+    let sips_status = std::process::Command::new("/usr/bin/sips")
+        .args(["-s", "format", "heic", "-s", "formatOptions", "100"])
+        .arg(&png_path)
+        .arg("--out")
+        .arg(&heic_path)
+        .output()
+        .unwrap()
+        .status;
+    assert!(sips_status.success());
+    // sips already gives the image an irot of 0; the cases add to it.
+    let heic_bytes = std::fs::read(&heic_path).unwrap();
+
+    for (index, (transforms, expected_size, expected_corner)) in
+        ORIENTATION_CASES.into_iter().enumerate()
+    {
+        let oriented_path = directory.path().join(format!("oriented-{index}.heic"));
+        std::fs::write(&oriented_path, with_transforms(&heic_bytes, transforms)).unwrap();
+
+        let (size, corner) = converted_orientation(&oriented_path, directory.path()).await;
+
+        assert_eq!(
+            (size, corner),
+            (expected_size, expected_corner),
+            "{transforms:?}"
+        );
+    }
+}
+
+// FFmpeg turns the image upright from the HEIC's EXIF item and keeps the tag
+// in the PNG it writes, which must not turn it a second time.
+#[cfg(target_os = "macos")]
+#[tokio::test(flavor = "multi_thread")]
+async fn heic_exif_orientation_is_applied_once() {
+    let directory = tempfile::tempdir().unwrap();
+    let png_path = directory.path().join("portrait.png");
+    write_corner_marked_png_tagged_portrait(&png_path);
+    let heic_path = directory.path().join("portrait.heic");
+    let sips_status = std::process::Command::new("/usr/bin/sips")
+        .args(["-s", "format", "heic"])
+        .arg(&png_path)
+        .arg("--out")
+        .arg(&heic_path)
+        .output()
+        .unwrap()
+        .status;
+    assert!(sips_status.success());
+
+    let (size, corner) = converted_orientation(&heic_path, directory.path()).await;
+
+    assert_eq!((size, corner), ((32, 64), "top right"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn exif_orientation_is_applied_to_photos() {
+    let directory = tempfile::tempdir().unwrap();
+    let png_path = directory.path().join("portrait.png");
+    write_corner_marked_png_tagged_portrait(&png_path);
+
+    let (size, corner) = converted_orientation(&png_path, directory.path()).await;
+
+    assert_eq!((size, corner), ((32, 64), "top right"));
 }

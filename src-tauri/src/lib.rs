@@ -8,6 +8,8 @@ mod conversion_tests;
 mod error;
 mod ffmpeg;
 mod formats;
+#[cfg(test)]
+mod heif_test_files;
 mod image_conversion;
 mod input_files;
 mod options;
