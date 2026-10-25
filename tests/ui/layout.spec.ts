@@ -54,6 +54,8 @@ test("a long error wraps inside its row", async ({ page }) => {
 
   const error = fileRow(page, LONG_NAME).getByRole("alert");
   await expect(error).toHaveText(LONG_ERROR);
+  const isClipped = await error.evaluate((element) => element.scrollHeight > element.clientHeight);
+  expect(isClipped).toBe(false);
   await expectFullyInWindow(error);
   await expectFullyInWindow(fileRow(page, LONG_NAME).getByRole("button", { name: "Remove" }));
   await expectFullyInWindow(page.getByRole("button", { name: "Convert again" }));

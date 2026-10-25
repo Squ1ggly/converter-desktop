@@ -59,7 +59,7 @@
   <Item.Content class="min-w-0">
     <Item.Title class="block w-full truncate select-text" title={item.path}>{item.name}</Item.Title>
     {#if item.status === "failed" && item.errorMessage}
-      <Item.Description class="text-destructive select-text" role="alert">{item.errorMessage}</Item.Description>
+      <Item.Description class="text-destructive line-clamp-none select-text" role="alert">{item.errorMessage}</Item.Description>
     {:else}
       <Item.Description class="flex items-center gap-2 tabular-nums">
         {formatBytes(item.sizeBytes)}
