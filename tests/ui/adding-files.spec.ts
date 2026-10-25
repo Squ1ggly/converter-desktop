@@ -147,3 +147,37 @@ test("adding files after a cancelled run keeps the cancelled ones", async ({ pag
   await expect(fileRow(page, "city.jpg")).toBeVisible();
   await expect(fileRow(page, "holiday.mov")).toBeVisible();
 });
+
+test("files from a slow folder scan never join a running conversion", async ({ page }) => {
+  const backend = await launchConverter(page, {
+    conversionMode: "manual",
+    folders: { [PICTURES_FOLDER]: [CITY_PHOTO] },
+  });
+  await backend.dropFiles([BEACH_PHOTO]);
+  await expect(fileRow(page, "beach.png")).toBeVisible();
+  await backend.holdScans();
+  await backend.dropFiles([PICTURES_FOLDER]);
+
+  await expect(page.getByText("Adding files")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Convert 1 file" })).toBeDisabled();
+  await page.keyboard.press("Meta+Enter");
+  await backend.releaseScans();
+
+  await expect(fileRow(page, "city.jpg")).toBeVisible();
+  await expect(page.getByText("Adding files")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Convert 2 files" })).toBeEnabled();
+  const { conversionRequests } = await backend.readLog();
+  expect(conversionRequests).toEqual([]);
+});
+
+test("an empty list shows progress while a folder is scanned", async ({ page }) => {
+  const backend = await launchConverter(page, { folders: { [PICTURES_FOLDER]: [BEACH_PHOTO, CITY_PHOTO] } });
+  await backend.holdScans();
+
+  await backend.dropFiles([PICTURES_FOLDER]);
+
+  await expect(page.getByRole("main").getByText("Adding files")).toBeVisible();
+  await expect(page.getByText("Drop images or videos")).toBeHidden();
+  await backend.releaseScans();
+  await expect(page.getByRole("heading", { name: "2 files" })).toBeVisible();
+});

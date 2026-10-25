@@ -16,6 +16,7 @@
     fileCount: number;
     finishedCount: number;
     isConverting: boolean;
+    isAdding: boolean;
     isCancelling: boolean;
     isRerun: boolean;
     platform: string;
@@ -31,6 +32,7 @@
     fileCount,
     finishedCount,
     isConverting,
+    isAdding,
     isCancelling,
     isRerun,
     platform,
@@ -61,5 +63,5 @@
     </fieldset>
   </ScrollArea>
 
-  <ConvertFooter {fileCount} {finishedCount} {isConverting} {isCancelling} {isRerun} {platform} {onConvert} {onCancel} />
+  <ConvertFooter {fileCount} {finishedCount} {isConverting} {isAdding} {isCancelling} {isRerun} {platform} {onConvert} {onCancel} />
 </aside>

@@ -9,6 +9,8 @@
     fileCount: number;
     finishedCount: number;
     isConverting: boolean;
+    // Files are still being added; converting waits for them.
+    isAdding: boolean;
     isCancelling: boolean;
     // Every file has a result; converting again redoes them all.
     isRerun: boolean;
@@ -17,7 +19,7 @@
     onCancel: () => void;
   }
 
-  let { fileCount, finishedCount, isConverting, isCancelling, isRerun, platform, onConvert, onCancel }: Props =
+  let { fileCount, finishedCount, isConverting, isAdding, isCancelling, isRerun, platform, onConvert, onCancel }: Props =
     $props();
 
   const convertLabel = $derived(isRerun ? "Convert again" : `Convert ${pluralise(fileCount, "file")}`);
@@ -35,7 +37,7 @@
       {isCancelling ? "Cancelling" : "Cancel"}
     </Button>
   {:else}
-    <Button size="lg" class="w-full" onclick={onConvert} disabled={fileCount === 0}>
+    <Button size="lg" class="w-full" onclick={onConvert} disabled={fileCount === 0 || isAdding}>
       {convertLabel}
       <ShortcutHint shortcut="convert" {platform} />
     </Button>

@@ -32,6 +32,9 @@ Folders are searched recursively, including every subfolder. Inside a folder:
 - Other files are skipped without a message.
 - Hidden files and folders (names starting with `.`) are skipped.
 
+A large folder can take a moment to search. The list shows "Adding files" until it's done, and
+converting waits until then.
+
 ## Skipped files
 
 - **Unsupported files** you drop or pick directly are skipped, and a "Skipped N unsupported files"

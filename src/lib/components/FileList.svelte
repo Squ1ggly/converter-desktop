@@ -1,6 +1,7 @@
 <script lang="ts">
   import FolderSearchIcon from "@lucide/svelte/icons/folder-search";
   import { Button } from "$lib/components/ui/button/index.js";
+  import { Spinner } from "$lib/components/ui/spinner/index.js";
   import * as Item from "$lib/components/ui/item/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import { pluralise } from "$lib/formatting";
@@ -9,6 +10,7 @@
 
   interface Props {
     queue: FileQueue;
+    isAdding: boolean;
     imageTargetLabel: string;
     videoTargetLabel: string;
     revealLabel: string;
@@ -17,7 +19,7 @@
     onReveal: (outputPath: string) => void;
   }
 
-  let { queue, imageTargetLabel, videoTargetLabel, revealLabel, onRemove, onOpen, onReveal }: Props = $props();
+  let { queue, isAdding, imageTargetLabel, videoTargetLabel, revealLabel, onRemove, onOpen, onReveal }: Props = $props();
 
   interface FileGroup {
     title: string;
@@ -70,7 +72,14 @@
   <header class="flex min-h-16 items-center justify-between gap-3 border-b px-5 py-3">
     <div aria-live="polite">
       <h2 class="text-sm font-semibold" data-testid="list-heading">{heading}</h2>
-      <p class="text-muted-foreground text-xs">{subheading}</p>
+      {#if isAdding}
+        <p class="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <Spinner class="size-3" role="presentation" aria-label={undefined} aria-hidden="true" />
+          Adding files
+        </p>
+      {:else}
+        <p class="text-muted-foreground text-xs">{subheading}</p>
+      {/if}
     </div>
     {#if queue.hasFinishedRun && firstOutputPath}
       {@const outputPath = firstOutputPath}

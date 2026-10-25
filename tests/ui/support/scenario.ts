@@ -21,6 +21,8 @@ export interface MockScenario {
   failingFiles: Record<string, string>;
   // Commands that fail, with the error each returns, e.g. { open_output: "Not found" }.
   failingCommands: Record<string, string>;
+  // Keeps get_catalog waiting until the test calls releaseCatalog(), like a slow start.
+  holdsCatalog: boolean;
 }
 
 type WithoutFileId<Event> = Event extends ConversionEvent ? Omit<Event, "fileId"> : never;
@@ -52,6 +54,10 @@ export interface MockBackendControls {
   failBatch(kind: MediaKind, message: string): void;
   // Makes that kind's convert_files call return before every file has a result.
   endBatchEarly(kind: MediaKind): void;
+  // Scans started after this wait until releaseScans(), like a large folder.
+  holdScans(): void;
+  releaseScans(): void;
+  releaseCatalog(): void;
   requestWindowClose(): Promise<void>;
   readLog(): BackendLog;
 }

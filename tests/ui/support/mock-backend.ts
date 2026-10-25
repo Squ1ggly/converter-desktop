@@ -5,7 +5,7 @@ import type { Channel, InvokeArgs } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
-import type { ConversionEvent, ConversionRequest, InspectedFile, MediaKind } from "$lib/backend";
+import type { ConversionCatalog, ConversionEvent, ConversionRequest, InspectedFile, MediaKind } from "$lib/backend";
 import { buildCatalog, classifyFileName } from "./catalog";
 import type {
   BackendLog,
@@ -66,6 +66,12 @@ function readScenario(): MockScenario {
 
 const scenario = readScenario();
 const pendingDialogResults: DialogResult[] = [];
+const heldScans: (() => void)[] = [];
+let isHoldingScans = false;
+let releaseHeldCatalog: () => void = () => {};
+const catalogReleased = new Promise<void>((resolve) => {
+  releaseHeldCatalog = resolve;
+});
 const activeBatches: ActiveBatch[] = [];
 const backendLog: BackendLog = {
   dialogs: [],
@@ -116,6 +122,30 @@ function inspectFile(path: string): InspectedFile {
 function inspectPaths(paths: string[]): InspectedFile[] {
   const inspectedFiles = paths.flatMap(expandFolder).map(inspectFile);
   return inspectedFiles;
+}
+
+function inspectPathsWhenReleased(paths: string[]): InspectedFile[] | Promise<InspectedFile[]> {
+  if (!isHoldingScans) {
+    return inspectPaths(paths);
+  }
+
+  const scanFinished = new Promise<InspectedFile[]>((resolve) => heldScans.push(() => resolve(inspectPaths(paths))));
+  return scanFinished;
+}
+
+function releaseScans(): void {
+  isHoldingScans = false;
+  for (const finishScan of heldScans.splice(0)) {
+    finishScan();
+  }
+}
+
+async function getCatalog(): Promise<ConversionCatalog> {
+  if (scenario.holdsCatalog) {
+    await catalogReleased;
+  }
+  const catalog = buildCatalog(scenario.platform);
+  return catalog;
 }
 
 function outputPathFor(inputPath: string, request: ConversionRequest): string {
@@ -276,8 +306,8 @@ function argumentsAs<CommandArguments>(payload: InvokeArgs | undefined): Command
 type CommandHandler = (payload: InvokeArgs | undefined) => unknown;
 
 const COMMAND_HANDLERS: Record<string, CommandHandler> = {
-  get_catalog: () => buildCatalog(scenario.platform),
-  inspect_paths: (payload) => inspectPaths(argumentsAs<{ paths: string[] }>(payload).paths),
+  get_catalog: () => getCatalog(),
+  inspect_paths: (payload) => inspectPathsWhenReleased(argumentsAs<{ paths: string[] }>(payload).paths),
   convert_files: (payload) => {
     const { request, onEvent } = argumentsAs<{ request: ConversionRequest; onEvent: Channel<ConversionEvent> }>(payload);
     return convertFiles(request, onEvent);
@@ -338,6 +368,11 @@ const controls: MockBackendControls = {
   sendFileEvent,
   failBatch,
   endBatchEarly,
+  holdScans: () => {
+    isHoldingScans = true;
+  },
+  releaseScans,
+  releaseCatalog: () => releaseHeldCatalog(),
   requestWindowClose: () => emit(CLOSE_REQUESTED_EVENT, null),
   readLog: () => backendLog,
 };

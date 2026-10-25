@@ -8,6 +8,7 @@
   import { open, type OpenDialogOptions } from "@tauri-apps/plugin-dialog";
   import { Toaster } from "$lib/components/ui/sonner/index.js";
   import * as Tooltip from "$lib/components/ui/tooltip/index.js";
+  import BusyState from "$lib/components/BusyState.svelte";
   import DropOverlay from "$lib/components/DropOverlay.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import FileList from "$lib/components/FileList.svelte";
@@ -18,7 +19,6 @@
   import Toolbar from "$lib/components/Toolbar.svelte";
   import {
     getCatalog,
-    inspectPaths,
     openOutput,
     revealOutput,
     type ConversionCatalog,
@@ -26,6 +26,7 @@
   } from "$lib/backend";
   import { ConversionRun } from "$lib/conversion-run.svelte";
   import { errorMessageOf, showError } from "$lib/errors";
+  import { FileAdder, type AddOutcome } from "$lib/file-adder.svelte";
   import { pluralise, revealInFolderLabel } from "$lib/formatting";
   import { PreferenceStore } from "$lib/preference-store.svelte";
   import { FileQueue } from "$lib/queue.svelte";
@@ -33,10 +34,12 @@
   import type { AppView } from "$lib/views";
 
   const MAX_NAMES_IN_TOAST = 3;
+  const WAIT_FOR_CONVERSION_MESSAGE = "Wait for the current conversion to finish.";
 
   const queue = new FileQueue();
   const preferenceStore = new PreferenceStore();
   const conversionRun = new ConversionRun(queue);
+  const fileAdder = new FileAdder(queue);
 
   let catalog = $state<ConversionCatalog | null>(null);
   let startupError = $state<string | null>(null);
@@ -103,24 +106,33 @@
       return;
     }
     if (queue.isConverting) {
-      toast.info("Wait for the current conversion to finish.");
+      toast.info(WAIT_FOR_CONVERSION_MESSAGE);
       return;
     }
 
+    // Shows the list straight away, so a slow folder scan shows its progress.
+    view = "converter";
     try {
-      const inspectedFiles = await inspectPaths(paths);
-      queue.startNextBatchIfFinished();
-      view = "converter";
-      const skippedNames = queue.add(inspectedFiles);
-
-      if (skippedNames.length > 0) {
-        toast.warning(`Skipped ${pluralise(skippedNames.length, "unsupported file")}`, {
-          description: describeSkippedFiles(skippedNames),
-        });
-      }
+      const outcome = await fileAdder.add(paths);
+      reportAddOutcome(outcome);
     } catch (error) {
       showError("Couldn't add files", error);
     }
+  }
+
+  function reportAddOutcome(outcome: AddOutcome): void {
+    if (outcome.kind === "busy") {
+      toast.info(WAIT_FOR_CONVERSION_MESSAGE);
+      return;
+    }
+    if (outcome.kind !== "added" || outcome.unsupportedNames.length === 0) {
+      return;
+    }
+
+    const skippedNames = outcome.unsupportedNames;
+    toast.warning(`Skipped ${pluralise(skippedNames.length, "unsupported file")}`, {
+      description: describeSkippedFiles(skippedNames),
+    });
   }
 
   async function chooseFiles(): Promise<void> {
@@ -170,6 +182,9 @@
   }
 
   async function startConversion(): Promise<void> {
+    if (fileAdder.isAdding) {
+      return;
+    }
     await conversionRun.start($state.snapshot(preferenceStore.values));
   }
 
@@ -300,6 +315,8 @@
         <HelpView />
       {:else if catalog && view === "settings"}
         <SettingsView {catalog} bind:preferences={preferenceStore.values} isConverting={queue.isConverting} />
+      {:else if catalog && queue.isEmpty && fileAdder.isAdding}
+        <BusyState label="Adding files" />
       {:else if catalog && queue.isEmpty}
         <EmptyState
           imageExtensions={catalog.imageInputExtensions}
@@ -312,6 +329,7 @@
         <div class="grid h-full min-h-0 grid-cols-[1fr_22rem]">
           <FileList
             {queue}
+            isAdding={fileAdder.isAdding}
             {imageTargetLabel}
             {videoTargetLabel}
             {revealLabel}
@@ -327,6 +345,7 @@
             fileCount={queue.items.length}
             finishedCount={queue.summary.finishedCount}
             isConverting={queue.isConverting}
+            isAdding={fileAdder.isAdding}
             isCancelling={conversionRun.isCancelling}
             isRerun={queue.hasFinishedRun}
             {platform}
