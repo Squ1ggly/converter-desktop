@@ -29,7 +29,7 @@ pub fn reserve_output_path(
 
         match creation_result {
             Ok(_) => return Ok(candidate_path),
-            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
             Err(error) => return Err(error.into()),
         }
     }

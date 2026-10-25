@@ -1,3 +1,8 @@
+#![allow(
+    clippy::needless_pass_by_value,
+    reason = "Tauri hands every command its arguments by value"
+)]
+
 use std::path::{Path, PathBuf};
 
 use tauri::ipc::Channel;

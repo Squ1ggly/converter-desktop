@@ -60,9 +60,9 @@ pub fn inspect_paths(paths: Vec<PathBuf>) -> PathInspection {
 
         let (subfolders, convertible_files) = split_folder_entries(&folder);
         pending_folders.extend(subfolders.into_iter().rev());
-        convertible_files
-            .into_iter()
-            .for_each(|file_path| collector.add(file_path));
+        for file_path in convertible_files {
+            collector.add(file_path);
+        }
     }
 
     collector.into_inspection()

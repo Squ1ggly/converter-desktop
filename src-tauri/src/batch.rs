@@ -105,7 +105,7 @@ async fn convert_queued_file(job: FileJob, parallel_limit: Arc<Semaphore>, conte
 
     let permit = tokio::select! {
         permit = parallel_limit.acquire_owned() => permit.ok(),
-        _ = context.cancellation.cancelled() => None,
+        () = context.cancellation.cancelled() => None,
     };
     let Some(_permit) = permit else {
         send_event(&context, ConversionEvent::Cancelled { file_id });

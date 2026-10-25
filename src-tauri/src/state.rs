@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
@@ -79,7 +79,7 @@ impl ActiveBatches {
             .wait_timeout_while(batches, timeout, |batches| {
                 batches.values().any(|entry| entry.is_running)
             })
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .unwrap_or_else(PoisonError::into_inner);
         let has_finished = !batches.values().any(|entry| entry.is_running);
         has_finished
     }
@@ -114,9 +114,7 @@ impl ProducedOutputs {
 // Every value guarded here is replaced in one step, so a panic elsewhere can't
 // leave it half-updated and poisoning can be ignored.
 fn lock_ignoring_poison<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[cfg(test)]

@@ -51,7 +51,7 @@ pub fn target_dimensions(width: u32, height: u32, resize: ResizeOption) -> Dimen
     let scale_factor = match resize {
         ResizeOption::Original => None,
         ResizeOption::Percent { percent } => {
-            Some(percent.clamp(MIN_PERCENT, MAX_PERCENT) as f64 / 100.0)
+            Some(f64::from(percent.clamp(MIN_PERCENT, MAX_PERCENT)) / 100.0)
         }
         ResizeOption::Fit {
             max_width,
@@ -78,10 +78,10 @@ fn fit_scale_factor(
 ) -> Option<f64> {
     let width_ratio = max_width
         .filter(|limit| *limit > 0)
-        .map(|limit| limit as f64 / width as f64);
+        .map(|limit| f64::from(limit) / f64::from(width));
     let height_ratio = max_height
         .filter(|limit| *limit > 0)
-        .map(|limit| limit as f64 / height as f64);
+        .map(|limit| f64::from(limit) / f64::from(height));
 
     let scale_factor = match (width_ratio, height_ratio) {
         (Some(width_ratio), Some(height_ratio)) => Some(width_ratio.min(height_ratio)),
@@ -94,13 +94,23 @@ fn fit_scale_factor(
 
 // Rounds a fractional length (an SVG or PDF size) up to whole pixels. Float
 // to int casts saturate, so absurd sizes become u32::MAX and fail the budget.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "float to int casts saturate, and the budget check rejects the result"
+)]
 pub fn whole_pixels(length: f32) -> u32 {
     let pixel_length = length.ceil().max(1.0) as u32;
     pixel_length
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "float to int casts saturate, and the budget check rejects the result"
+)]
 fn scale_length(length: u32, scale_factor: f64) -> u32 {
-    let scaled_length = (length as f64 * scale_factor).round().max(1.0) as u32;
+    let scaled_length = (f64::from(length) * scale_factor).round().max(1.0) as u32;
     scaled_length
 }
 
@@ -147,9 +157,10 @@ pub fn flatten_onto_white(image: &DynamicImage) -> RgbImage {
 }
 
 fn blend_channel_onto_white(channel: u8, alpha: u8) -> u8 {
-    let opacity = alpha as u32;
-    let blended = (channel as u32 * opacity + 255 * (255 - opacity) + 127) / 255;
-    blended as u8
+    let opacity = u32::from(alpha);
+    let blended = (u32::from(channel) * opacity + 255 * (255 - opacity) + 127) / 255;
+    let blended_channel = u8::try_from(blended).unwrap_or(u8::MAX);
+    blended_channel
 }
 
 #[cfg(test)]

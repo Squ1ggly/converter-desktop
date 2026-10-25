@@ -610,7 +610,7 @@ async fn cancelling_stops_ffmpeg() {
         .expect("remove the folder FFmpeg was writing to");
 }
 
-fn assert_too_large(conversion_result: Result<PathBuf, ConversionError>, input: &str) {
+fn assert_too_large(conversion_result: &Result<PathBuf, ConversionError>, input: &str) {
     assert!(
         matches!(
             conversion_result,
@@ -631,7 +631,7 @@ async fn sizes_beyond_the_pixel_budget_fail_cleanly() {
     };
     let upscale_result =
         convert_image_to(&png_path, ImageFormat::Png, unbounded_fit, directory.path()).await;
-    assert_too_large(upscale_result, "PNG fit to u32::MAX");
+    assert_too_large(&upscale_result, "PNG fit to u32::MAX");
 
     // 144 megapixels, drawn at the requested size before anything else.
     let svg_path = directory.path().join("huge.svg");
@@ -647,7 +647,7 @@ async fn sizes_beyond_the_pixel_budget_fail_cleanly() {
         directory.path(),
     )
     .await;
-    assert_too_large(svg_result, "12000 × 12000 SVG");
+    assert_too_large(&svg_result, "12000 × 12000 SVG");
 
     // A 1210 × 810 point page is 2521 × 1688 at 150 DPI, so 1000% is 425 megapixels.
     let large_png_path = convert_image_to(
@@ -673,7 +673,7 @@ async fn sizes_beyond_the_pixel_budget_fail_cleanly() {
         directory.path(),
     )
     .await;
-    assert_too_large(pdf_result, "PDF at 1000%");
+    assert_too_large(&pdf_result, "PDF at 1000%");
 }
 
 // A BMP header that claims 20000 × 20000 pixels with no pixel data, so the

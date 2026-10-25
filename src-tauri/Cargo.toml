@@ -42,8 +42,11 @@ dunce = "1.0.5"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "time", "macros"] }
 
 [lints.clippy]
+pedantic = { level = "warn", priority = -1 }
 # AGENTS.md asks for results to be named before they are returned.
 let_and_return = "allow"
+# Pixel sizes and durations stay far below 2^24, where f32 starts losing precision.
+cast_precision_loss = "allow"
 
 [target."cfg(windows)".dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading"] }

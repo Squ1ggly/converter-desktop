@@ -33,6 +33,9 @@ pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 #[cfg(target_os = "macos")]
 const TRAFFIC_LIGHT_POSITION: (f64, f64) = (18.0, 27.0);
 
+/// # Panics
+///
+/// If the app can't start, for example because the window can't be created.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()

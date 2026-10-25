@@ -189,6 +189,6 @@ mod tests {
         let message = raw_error.to_string();
 
         assert!(!message.contains("os error"), "{message}");
-        assert!(!message.is_empty());
+        assert_ne!(message, "");
     }
 }

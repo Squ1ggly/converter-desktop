@@ -203,6 +203,11 @@ fn record_duration_if_present(line: &str, total_duration_microseconds: &AtomicU6
 }
 
 // Parses FFmpeg's input summary, e.g. "  Duration: 00:01:23.45, start: ...".
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the duration is positive, and float to int casts saturate"
+)]
 fn parse_duration_microseconds(line: &str) -> Option<u64> {
     let after_label = line.trim_start().strip_prefix("Duration: ")?;
     let timestamp = after_label.split(',').next()?;
@@ -222,6 +227,10 @@ fn parse_duration_microseconds(line: &str) -> Option<u64> {
 }
 
 // Parses one `-progress` line, e.g. "out_time_us=1234567".
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "a percentage needs no more than f32's precision"
+)]
 fn parse_progress_percent(line: &str, total_microseconds: u64) -> Option<f32> {
     if total_microseconds == 0 {
         return None;

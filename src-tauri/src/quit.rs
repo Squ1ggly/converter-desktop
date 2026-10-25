@@ -9,6 +9,10 @@ const EXIT_CLEANUP_TIMEOUT: Duration = Duration::from_secs(3);
 
 // The process ends after this returns, without running destructors, so child
 // processes would keep running and partial outputs would stay behind.
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "Tauri's event loop passes events by value"
+)]
 pub fn handle_run_event(app: &AppHandle, event: RunEvent) {
     if !matches!(event, RunEvent::Exit) {
         return;
@@ -69,6 +73,10 @@ mod macos_menu {
         Ok(menu)
     }
 
+    #[allow(
+        clippy::needless_pass_by_value,
+        reason = "Tauri passes menu events by value"
+    )]
     pub fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
         if event.id() == QUIT_MENU_ITEM_ID {
             request_quit(app);
