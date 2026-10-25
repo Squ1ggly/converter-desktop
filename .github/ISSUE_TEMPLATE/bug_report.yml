@@ -1,5 +1,5 @@
 name: Bug report
-description: Something doesn't work as the docs describe.
+description: Report something that doesn't work.
 labels: [bug]
 body:
   - type: markdown
