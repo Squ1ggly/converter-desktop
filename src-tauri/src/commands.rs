@@ -1,124 +1,65 @@
-use std::collections::HashSet;
+#![allow(
+    clippy::needless_pass_by_value,
+    reason = "Tauri hands every command its arguments by value"
+)]
+
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::batch::{BatchContext, ConversionEvent, ConversionRequest, run_batch};
-use crate::formats::{ConversionCatalog, MediaKind, build_catalog, classify_path};
+use crate::formats::{ConversionCatalog, MediaKind, build_catalog};
+use crate::input_files::{self, InspectedFile, PathInspection};
 use crate::state::AppState;
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InspectedFile {
-    path: PathBuf,
-    name: String,
-    size_bytes: u64,
-    // None for files the app can't convert.
-    kind: Option<MediaKind>,
-}
 
 #[tauri::command]
 pub fn get_catalog() -> ConversionCatalog {
     build_catalog()
 }
 
-// Folders are searched recursively and their unsupported files skipped.
-// Loose files are always returned so the UI can report unsupported ones.
+// Runs off the main thread: a large folder takes a while to read, and the
+// window would stop responding meanwhile.
 #[tauri::command]
-pub fn inspect_paths(app: AppHandle, paths: Vec<PathBuf>) -> Vec<InspectedFile> {
-    let inspected_files: Vec<InspectedFile> = expand_folders(paths)
-        .into_iter()
-        .filter_map(|path| inspect_file(&path))
-        .collect();
+pub async fn inspect_input_paths(
+    app: AppHandle,
+    paths: Vec<PathBuf>,
+) -> Result<PathInspection, String> {
+    let inspection =
+        tauri::async_runtime::spawn_blocking(move || input_files::inspect_paths(paths))
+            .await
+            .map_err(|error| error.to_string())?;
+    allow_image_previews(&app, &inspection.files);
+    Ok(inspection)
+}
 
-    // Allows image previews through the asset protocol, one file at a time.
+// The original command, returning only the files. Kept until the UI calls
+// inspect_input_paths, which also says when the file limit was reached.
+#[tauri::command]
+pub async fn inspect_paths(
+    app: AppHandle,
+    paths: Vec<PathBuf>,
+) -> Result<Vec<InspectedFile>, String> {
+    let inspection = inspect_input_paths(app, paths).await?;
+    Ok(inspection.files)
+}
+
+// The webview can load these files through the asset protocol, one file at a
+// time, for thumbnails. Nothing else is readable.
+fn allow_image_previews(app: &AppHandle, files: &[InspectedFile]) {
     let asset_scope = app.asset_protocol_scope();
-    for file in inspected_files
+    let image_files = files
         .iter()
-        .filter(|file| file.kind == Some(MediaKind::Image))
-    {
-        let _ = asset_scope.allow_file(&file.path);
-    }
-
-    inspected_files
-}
-
-fn expand_folders(paths: Vec<PathBuf>) -> Vec<PathBuf> {
-    let mut files = Vec::new();
-    let mut pending_folders = Vec::new();
-
-    for path in paths {
-        if path.is_dir() {
-            pending_folders.push(path);
-        } else {
-            files.push(path);
+        .filter(|file| file.kind == Some(MediaKind::Image));
+    for file in image_files {
+        if let Err(error) = asset_scope.allow_file(&file.path) {
+            log::warn!(
+                "couldn't allow a preview of {}: {error}",
+                file.path.display()
+            );
         }
     }
-
-    // Symlinks can make a folder contain itself; each real folder is read once.
-    let mut visited_folders = HashSet::new();
-
-    while let Some(folder) = pending_folders.pop() {
-        let real_folder = std::fs::canonicalize(&folder).unwrap_or(folder);
-        if !visited_folders.insert(real_folder.clone()) {
-            continue;
-        }
-
-        let (subfolders, convertible_files) = split_folder_entries(&real_folder);
-        pending_folders.extend(subfolders);
-        files.extend(convertible_files);
-    }
-
-    files
-}
-
-fn split_folder_entries(folder: &Path) -> (Vec<PathBuf>, Vec<PathBuf>) {
-    let (subfolders, other_entries): (Vec<PathBuf>, Vec<PathBuf>) = list_visible_entries(folder)
-        .into_iter()
-        .partition(|entry_path| entry_path.is_dir());
-    let convertible_files = other_entries
-        .into_iter()
-        .filter(|entry_path| classify_path(entry_path).is_some())
-        .collect();
-
-    (subfolders, convertible_files)
-}
-
-fn list_visible_entries(folder: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = std::fs::read_dir(folder) else {
-        return Vec::new();
-    };
-
-    let mut entry_paths: Vec<PathBuf> = entries
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| !is_hidden(path))
-        .collect();
-    entry_paths.sort();
-    entry_paths
-}
-
-fn is_hidden(path: &Path) -> bool {
-    let is_dot_file = path
-        .file_name()
-        .map(|name| name.to_string_lossy().starts_with('.'))
-        .unwrap_or(false);
-    is_dot_file
-}
-
-fn inspect_file(path: &Path) -> Option<InspectedFile> {
-    let metadata = std::fs::metadata(path).ok()?;
-    let name = path.file_name()?.to_string_lossy().into_owned();
-
-    let inspected_file = InspectedFile {
-        path: path.to_path_buf(),
-        name,
-        size_bytes: metadata.len(),
-        kind: classify_path(path),
-    };
-    Some(inspected_file)
 }
 
 #[tauri::command]
@@ -129,11 +70,12 @@ pub async fn convert_files(
 ) -> Result<(), String> {
     let ffmpeg = state.ffmpeg.clone()?;
     let batch_id = request.batch_id.clone();
+    let cancellation = state.active_batches.start(&batch_id)?;
 
     let context = BatchContext {
         ffmpeg,
         scratch_root: state.scratch_root.clone(),
-        cancellation: state.active_batches.start(&batch_id),
+        cancellation,
         events: on_event,
         produced_outputs: state.produced_outputs.clone(),
     };
@@ -178,39 +120,4 @@ fn ensure_produced_by_app(state: &AppState, path: &Path) -> Result<(), String> {
         return Ok(());
     }
     Err("Only files converted in this session can be opened from here".to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn finds_convertible_files_in_nested_folders() {
-        let root = tempfile::tempdir().unwrap();
-        let nested = root.path().join("trip").join("day one");
-        std::fs::create_dir_all(&nested).unwrap();
-        std::fs::write(nested.join("beach.jpg"), b"").unwrap();
-        std::fs::write(nested.join("notes.txt"), b"").unwrap();
-        std::fs::write(root.path().join(".hidden.png"), b"").unwrap();
-
-        let files = expand_folders(vec![root.path().to_path_buf()]);
-
-        let names: Vec<String> = files
-            .iter()
-            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
-            .collect();
-        assert_eq!(names, ["beach.jpg"]);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn symlink_loops_do_not_hang() {
-        let root = tempfile::tempdir().unwrap();
-        std::fs::write(root.path().join("photo.png"), b"").unwrap();
-        std::os::unix::fs::symlink(root.path(), root.path().join("loop")).unwrap();
-
-        let files = expand_folders(vec![root.path().to_path_buf()]);
-
-        assert_eq!(files.len(), 1);
-    }
 }

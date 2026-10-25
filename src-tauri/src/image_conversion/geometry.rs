@@ -1,14 +1,48 @@
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView, Rgb, RgbImage};
 
+use crate::error::{ConversionError, ConversionResult};
 use crate::options::ResizeOption;
 
 const MIN_PERCENT: u32 = 1;
 const MAX_PERCENT: u32 = 1000;
 
+// The largest image decoded, rendered or resized, so a huge file or size
+// fails cleanly instead of exhausting memory. 100 megapixels is 400 MB as
+// 8-bit RGBA and covers every phone and most camera photos.
+pub const MAX_IMAGE_PIXELS: u64 = 100_000_000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Dimensions {
     pub width: u32,
     pub height: u32,
+}
+
+impl Dimensions {
+    pub fn pixel_count(self) -> u64 {
+        let pixel_count = u64::from(self.width) * u64::from(self.height);
+        pixel_count
+    }
+
+    pub fn fits_pixel_budget(self) -> bool {
+        self.pixel_count() <= MAX_IMAGE_PIXELS
+    }
+}
+
+// For a source image, before it is decoded.
+pub fn ensure_source_fits(dimensions: Dimensions) -> ConversionResult<()> {
+    if !dimensions.fits_pixel_budget() {
+        return Err(ConversionError::ImageTooLarge);
+    }
+    Ok(())
+}
+
+// For the size the user asked for, before resizing or rendering.
+pub fn ensure_target_fits(dimensions: Dimensions) -> ConversionResult<()> {
+    if !dimensions.fits_pixel_budget() {
+        return Err(ConversionError::TargetTooLarge);
+    }
+    Ok(())
 }
 
 // "Fit" scales up or down to fill the box, keeping proportions. A blank side
@@ -17,7 +51,7 @@ pub fn target_dimensions(width: u32, height: u32, resize: ResizeOption) -> Dimen
     let scale_factor = match resize {
         ResizeOption::Original => None,
         ResizeOption::Percent { percent } => {
-            Some(percent.clamp(MIN_PERCENT, MAX_PERCENT) as f64 / 100.0)
+            Some(f64::from(percent.clamp(MIN_PERCENT, MAX_PERCENT)) / 100.0)
         }
         ResizeOption::Fit {
             max_width,
@@ -44,10 +78,10 @@ fn fit_scale_factor(
 ) -> Option<f64> {
     let width_ratio = max_width
         .filter(|limit| *limit > 0)
-        .map(|limit| limit as f64 / width as f64);
+        .map(|limit| f64::from(limit) / f64::from(width));
     let height_ratio = max_height
         .filter(|limit| *limit > 0)
-        .map(|limit| limit as f64 / height as f64);
+        .map(|limit| f64::from(limit) / f64::from(height));
 
     let scale_factor = match (width_ratio, height_ratio) {
         (Some(width_ratio), Some(height_ratio)) => Some(width_ratio.min(height_ratio)),
@@ -58,22 +92,40 @@ fn fit_scale_factor(
     scale_factor
 }
 
+// Rounds a fractional length (an SVG or PDF size) up to whole pixels. Float
+// to int casts saturate, so absurd sizes become u32::MAX and fail the budget.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "float to int casts saturate, and the budget check rejects the result"
+)]
+pub fn whole_pixels(length: f32) -> u32 {
+    let pixel_length = length.ceil().max(1.0) as u32;
+    pixel_length
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "float to int casts saturate, and the budget check rejects the result"
+)]
 fn scale_length(length: u32, scale_factor: f64) -> u32 {
-    let scaled_length = (length as f64 * scale_factor).round().max(1.0) as u32;
+    let scaled_length = (f64::from(length) * scale_factor).round().max(1.0) as u32;
     scaled_length
 }
 
-pub fn resize_image(image: DynamicImage, resize: ResizeOption) -> DynamicImage {
+pub fn resize_image(image: DynamicImage, resize: ResizeOption) -> ConversionResult<DynamicImage> {
     let (width, height) = image.dimensions();
     let target = target_dimensions(width, height, resize);
 
     let is_unchanged = target.width == width && target.height == height;
     if is_unchanged {
-        return image;
+        return Ok(image);
     }
 
+    ensure_target_fits(target)?;
     let resized_image = image.resize_exact(target.width, target.height, FilterType::Lanczos3);
-    resized_image
+    Ok(resized_image)
 }
 
 // Shrinks (never enlarges) so neither side exceeds `max_length`.
@@ -105,9 +157,10 @@ pub fn flatten_onto_white(image: &DynamicImage) -> RgbImage {
 }
 
 fn blend_channel_onto_white(channel: u8, alpha: u8) -> u8 {
-    let opacity = alpha as u32;
-    let blended = (channel as u32 * opacity + 255 * (255 - opacity) + 127) / 255;
-    blended as u8
+    let opacity = u32::from(alpha);
+    let blended = (u32::from(channel) * opacity + 255 * (255 - opacity) + 127) / 255;
+    let blended_channel = u8::try_from(blended).unwrap_or(u8::MAX);
+    blended_channel
 }
 
 #[cfg(test)]
@@ -154,6 +207,36 @@ mod tests {
             dimensions_of(3, 3, ResizeOption::Percent { percent: 1 }),
             (1, 1)
         );
+    }
+
+    #[test]
+    fn sizes_beyond_the_pixel_budget_are_rejected_before_resizing() {
+        let image = DynamicImage::new_rgba8(10, 10);
+        let huge_box = ResizeOption::Fit {
+            max_width: Some(u32::MAX),
+            max_height: None,
+        };
+
+        let resize_result = resize_image(image, huge_box);
+
+        assert!(matches!(
+            resize_result,
+            Err(ConversionError::TargetTooLarge)
+        ));
+    }
+
+    #[test]
+    fn the_pixel_budget_allows_exactly_its_limit() {
+        let at_limit = Dimensions {
+            width: 10_000,
+            height: 10_000,
+        };
+        let over_limit = Dimensions {
+            width: 10_000,
+            height: 10_001,
+        };
+        assert!(ensure_target_fits(at_limit).is_ok());
+        assert!(ensure_target_fits(over_limit).is_err());
     }
 
     #[test]

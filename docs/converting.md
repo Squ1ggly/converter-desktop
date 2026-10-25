@@ -21,6 +21,7 @@ Click **Cancel**. The button shows "Cancelling" until every file has stopped.
 
 - Files that haven't started are marked **Cancelled**.
 - Video conversions in progress are stopped, and their partly written files are deleted.
+- Quitting during a conversion asks first. See [Troubleshooting](troubleshooting.md).
 - An image that is already being converted may still finish.
 
 ## Results

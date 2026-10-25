@@ -1,3 +1,4 @@
+mod color;
 mod decode;
 mod encode;
 mod geometry;
@@ -40,7 +41,7 @@ pub async fn convert_image(conversion: ImageConversion<'_>) -> ConversionResult<
     let sized_image = if source.is_already_sized {
         source.image
     } else {
-        run_blocking(move || Ok(geometry::resize_image(source.image, resize))).await?
+        run_blocking(move || geometry::resize_image(source.image, resize)).await?
     };
     stop_if_cancelled(conversion.cancellation)?;
 
@@ -68,8 +69,12 @@ pub(crate) async fn run_blocking<T: Send + 'static>(
 ) -> ConversionResult<T> {
     let join_result = tokio::task::spawn_blocking(work).await;
 
+    // A panic here is a bug; the details go to the log, not to the user.
     match join_result {
         Ok(work_result) => work_result,
-        Err(join_error) => Err(std::io::Error::other(join_error.to_string()).into()),
+        Err(join_error) => {
+            log::error!("image work stopped: {join_error}");
+            Err(ConversionError::Unexpected)
+        }
     }
 }
