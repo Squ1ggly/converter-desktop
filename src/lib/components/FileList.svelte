@@ -2,11 +2,12 @@
   import FolderSearchIcon from "@lucide/svelte/icons/folder-search";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Spinner } from "$lib/components/ui/spinner/index.js";
-  import * as Item from "$lib/components/ui/item/index.js";
+  import { Tooltip as TooltipPrimitive } from "bits-ui";
+  import * as Tooltip from "$lib/components/ui/tooltip/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import { pluralise } from "$lib/formatting";
   import type { FileQueue, QueueItem } from "$lib/queue.svelte";
-  import FileRow from "./FileRow.svelte";
+  import FileGroupList from "./FileGroupList.svelte";
 
   interface Props {
     queue: FileQueue;
@@ -34,6 +35,10 @@
     ].filter((group) => group.items.length > 0),
   );
   const showsGroupTitles = $derived(groups.length > 1);
+
+  let scrollElement = $state<HTMLElement | null>(null);
+  let scrollContent = $state<HTMLElement | null>(null);
+  const rowTooltip = TooltipPrimitive.createTether<string>();
   const firstOutputPath = $derived(queue.items.find((item) => item.outputPath !== null)?.outputPath ?? null);
   const summary = $derived(queue.summary);
 
@@ -90,22 +95,32 @@
     {/if}
   </header>
 
-  <ScrollArea class="min-h-0 flex-1">
-    <div class="flex flex-col gap-4 p-3">
-      {#each groups as group (group.title)}
-        <div role="group" aria-label={group.title}>
-          {#if showsGroupTitles}
-            <h3 class="text-muted-foreground px-3 pt-1 pb-2 text-xs font-medium">
-              {group.title} · {group.items.length}
-            </h3>
-          {/if}
-          <Item.Group class="gap-1">
-            {#each group.items as item (item.id)}
-              <FileRow {item} targetLabel={group.targetLabel} {revealLabel} isLocked={queue.isConverting} {onRemove} {onOpen} {onReveal} />
-            {/each}
-          </Item.Group>
-        </div>
-      {/each}
+  <ScrollArea class="min-h-0 flex-1" bind:viewportRef={scrollElement}>
+    <div bind:this={scrollContent} class="flex flex-col gap-4 p-3">
+      {#if scrollElement && scrollContent}
+        {#each groups as group (group.title)}
+          <FileGroupList
+            title={group.title}
+            showsTitle={showsGroupTitles}
+            items={group.items}
+            targetLabel={group.targetLabel}
+            {revealLabel}
+            isLocked={queue.isConverting}
+            {scrollElement}
+            {scrollContent}
+            {rowTooltip}
+            {onRemove}
+            {onOpen}
+            {onReveal}
+          />
+        {/each}
+      {/if}
     </div>
   </ScrollArea>
+
+  <Tooltip.Root tether={rowTooltip}>
+    {#snippet children({ payload })}
+      <Tooltip.Content>{payload}</Tooltip.Content>
+    {/snippet}
+  </Tooltip.Root>
 </section>
