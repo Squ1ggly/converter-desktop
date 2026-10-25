@@ -325,7 +325,7 @@
   <div class="flex h-full flex-col">
     <Toolbar
       {view}
-      isMac={platform === "macos"}
+      {platform}
       hasFiles={!queue.isEmpty}
       isConverting={queue.isConverting}
       onAddFiles={chooseFiles}

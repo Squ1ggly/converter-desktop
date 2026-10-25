@@ -9,6 +9,8 @@ interface PlatformExpectations {
   otherModifierKey: "Meta" | "Control";
   openHint: string[];
   convertHint: string[];
+  settingsHint: string[];
+  helpHint: string[];
   revealLabel: string;
 }
 
@@ -19,6 +21,8 @@ const PLATFORMS: PlatformExpectations[] = [
     otherModifierKey: "Control",
     openHint: ["⌘", "O"],
     convertHint: ["⌘", "↩"],
+    settingsHint: ["⌘", ","],
+    helpHint: ["⌘", "?"],
     revealLabel: "Show in Finder",
   },
   {
@@ -27,6 +31,8 @@ const PLATFORMS: PlatformExpectations[] = [
     otherModifierKey: "Meta",
     openHint: ["Ctrl", "O"],
     convertHint: ["Ctrl", "Enter"],
+    settingsHint: ["Ctrl", ","],
+    helpHint: ["F1"],
     revealLabel: "Show in Explorer",
   },
   {
@@ -35,6 +41,8 @@ const PLATFORMS: PlatformExpectations[] = [
     otherModifierKey: "Meta",
     openHint: ["Ctrl", "O"],
     convertHint: ["Ctrl", "Enter"],
+    settingsHint: ["Ctrl", ","],
+    helpHint: ["F1"],
     revealLabel: "Show in folder",
   },
 ];
@@ -50,8 +58,31 @@ function convertButton(page: Page): Locator {
   return button;
 }
 
+async function tooltipKeysFor(page: Page, button: Locator): Promise<Locator> {
+  await button.hover();
+  const tooltip = page.locator("[data-slot=tooltip-content]").filter({ hasText: (await button.getAttribute("aria-label")) ?? "" });
+  await expect(tooltip).toBeVisible();
+  const keys = tooltip.locator("kbd > kbd");
+  return keys;
+}
+
 for (const expected of PLATFORMS) {
   test.describe(expected.platform, () => {
+    test("toolbar tooltips show this platform's keys", async ({ page }) => {
+      const backend = await launchConverter(page, { platform: expected.platform });
+      const toolbar = page.getByRole("banner");
+
+      await expect(await tooltipKeysFor(page, toolbar.getByRole("button", { name: "Settings" }))).toHaveText(
+        expected.settingsHint,
+      );
+      await expect(await tooltipKeysFor(page, toolbar.getByRole("button", { name: "Help" }))).toHaveText(expected.helpHint);
+      await backend.dropFiles([BEACH_PHOTO]);
+      const addFilesButton = toolbar.getByRole("button", { name: "Add files" });
+      await addFilesButton.hover();
+      const addFilesTooltip = page.locator("[data-slot=tooltip-content]").filter({ hasText: "Add files" });
+      await expect(addFilesTooltip.locator("kbd > kbd")).toHaveText(expected.openHint);
+    });
+
     test("shortcut hints use this platform's keys", async ({ page }) => {
       const backend = await launchConverter(page, { platform: expected.platform });
 
@@ -138,4 +169,15 @@ test("HEIC output is only offered on macOS", async ({ page }) => {
 
   await expect(page.getByRole("radio", { name: "JPG" })).toBeVisible();
   await expect(page.getByRole("radio", { name: "HEIC" })).toHaveCount(0);
+});
+
+test("⌘? opens and closes Help on macOS", async ({ page }) => {
+  await launchConverter(page, { platform: "macos" });
+  const helpButton = page.getByRole("banner").getByRole("button", { name: "Help" });
+
+  await page.keyboard.press("Meta+Shift+Slash");
+  await expect(helpButton).toHaveAttribute("aria-pressed", "true");
+
+  await page.keyboard.press("Meta+?");
+  await expect(helpButton).toHaveAttribute("aria-pressed", "false");
 });
