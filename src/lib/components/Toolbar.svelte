@@ -27,6 +27,20 @@
   };
 
   const pageTitle = $derived(PAGE_TITLES[view]);
+
+  let titleHeading = $state<HTMLHeadingElement | null>(null);
+  let previousView: AppView | null = null;
+
+  // A new page replaces what had focus, so focus moves to the page's title.
+  $effect(() => {
+    const currentView = view;
+    const hasChanged = previousView !== null && previousView !== currentView;
+    previousView = currentView;
+    if (!hasChanged) {
+      return;
+    }
+    titleHeading?.focus({ preventScroll: true });
+  });
   // Other platforms already show "Converter" in their native title bar.
   const showsInlineTitle = $derived(!isMac && view !== "converter");
 </script>
@@ -38,13 +52,17 @@
 >
   {#if isMac}
     <h1
-      class="text-muted-foreground pointer-events-none absolute inset-x-0 text-center text-[13px] font-normal"
+      bind:this={titleHeading}
+      tabindex="-1"
+      class="text-muted-foreground pointer-events-none absolute inset-x-0 text-center text-[13px] font-normal outline-none"
       data-tauri-drag-region
     >
       {pageTitle}
     </h1>
   {:else}
-    <h1 class={showsInlineTitle ? "order-1 text-sm font-medium" : "sr-only"}>{pageTitle}</h1>
+    <h1 bind:this={titleHeading} tabindex="-1" class="outline-none {showsInlineTitle ? 'order-1 text-sm font-medium' : 'sr-only'}">
+      {pageTitle}
+    </h1>
   {/if}
 
   {#if view !== "converter"}
