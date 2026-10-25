@@ -80,10 +80,11 @@ function Assert-InstalledFiles([string] $expectedMachine) {
 }
 
 function Assert-FfmpegWorks {
-  & $ffmpegPath -hide_banner -version | Select-Object -First 1
+  $versionOutput = & $ffmpegPath -hide_banner -version
   if ($LASTEXITCODE -ne 0) {
     Fail "converter-ffmpeg -version exited with $LASTEXITCODE"
   }
+  Write-Output ($versionOutput | Select-Object -First 1)
 
   $gitBash = Join-Path $env:ProgramFiles "Git\bin\bash.exe"
   & $gitBash (Join-Path $PSScriptRoot "ffmpeg.sh") ($ffmpegPath -replace "\\", "/")

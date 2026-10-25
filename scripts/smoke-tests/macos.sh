@@ -37,7 +37,8 @@ check_minimum_os() {
   echo "ok   $(basename "$binary_path") needs macOS $binary_minimum"
 }
 
-hdiutil attach -nobrowse -readonly -mountpoint "$mount_point" "$dmg_path" >/dev/null
+# The disk image shows the licence as an agreement first, which hdiutil asks to accept.
+yes | hdiutil attach -nobrowse -readonly -mountpoint "$mount_point" "$dmg_path" >/dev/null
 rm -rf "$app_path"
 ditto "$mount_point/Converter.app" "$app_path"
 hdiutil detach "$mount_point" >/dev/null
