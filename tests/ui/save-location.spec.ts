@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { expect, launchWithFiles, test, type MockBackend } from "./support/converter";
+import { expect, launchConverter, launchWithFiles, test, type MockBackend } from "./support/converter";
 import { BEACH_PHOTO, EXPORT_FOLDER } from "./support/sample-files";
 
 async function convertAndReadOutputDirectory(page: Page, backend: MockBackend): Promise<string | null | undefined> {
@@ -108,7 +108,9 @@ async function readCharacterPositions(page: Page, folderPath: string): Promise<C
 }
 
 test("the chosen folder reads left to right, starting with its slash", async ({ page }) => {
-  const backend = await launchWithFiles(page, [BEACH_PHOTO]);
+  // The Settings page is wide enough to show this path whole.
+  const backend = await launchConverter(page);
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
   await backend.answerNextDialog(EXPORT_FOLDER);
   await page.getByRole("radio", { name: "Another folder" }).click();
 
@@ -125,9 +127,14 @@ test("a long folder path keeps its end in view and shows in full on hover", asyn
   await page.getByRole("radio", { name: "Another folder" }).click();
 
   const positions = await readCharacterPositions(page, longFolder);
+  const panelBox = await page.getByRole("complementary", { name: "Settings" }).boundingBox();
+  const changeBox = await page.getByRole("button", { name: "Change" }).boundingBox();
+  const panelRight = (panelBox?.x ?? 0) + (panelBox?.width ?? 0);
+  expect(positions.boxRight).toBeLessThanOrEqual(panelRight);
   expect(positions.lastCharacterRight).toBeLessThanOrEqual(positions.boxRight + 1);
   expect(positions.lastCharacterRight).toBeGreaterThan(positions.boxLeft);
+  expect((changeBox?.x ?? 0) + (changeBox?.width ?? 0)).toBeLessThanOrEqual(panelRight);
 
-  await page.getByText(longFolder, { exact: true }).hover();
+  await page.locator("[data-slot=tooltip-trigger]", { hasText: longFolder }).hover();
   await expect(page.locator("[data-slot=tooltip-content]")).toContainText(longFolder);
 });

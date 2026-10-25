@@ -45,7 +45,8 @@
   const selectedMode: SaveMode = $derived(saveLocation.mode);
 </script>
 
-<Field.Set>
+<!-- A fieldset is as wide as its content by default, which would let a long path push Change out of view. -->
+<Field.Set class="min-w-0">
   <Field.Legend variant="label">Save to</Field.Legend>
   <!-- Bound through the saved choice, so the radio only moves once a folder is picked. -->
   <RadioGroup.Root bind:value={() => selectedMode, (mode) => void selectMode(mode)}>
