@@ -92,3 +92,13 @@ test("a web link in the guide opens in the browser", async ({ page }) => {
     .poll(async () => (await backend.readLog()).openedUrls)
     .toEqual(["https://github.com/Squ1ggly/converter-desktop/releases"]);
 });
+
+test("a link to another guide page also opens with the keyboard", async ({ page }) => {
+  await openHelp(page);
+  await helpPages(page).filter({ hasText: "Troubleshooting" }).click();
+
+  await guideArticle(page).locator('a[href="saving.md#file-names"]').focus();
+  await page.keyboard.press("Enter");
+
+  await expect(helpPages(page).filter({ hasText: "Saving" })).toHaveAttribute("aria-current", "page");
+});
