@@ -23,6 +23,9 @@ pub enum ConversionError {
     #[error("This image is too large to convert at that size. Choose a smaller size.")]
     TargetTooLarge,
 
+    #[error("Only files with a full path can be converted")]
+    RelativePath,
+
     #[error("Converting produced an empty file")]
     EmptyOutput,
 

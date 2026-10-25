@@ -1,4 +1,6 @@
 mod batch;
+#[cfg(test)]
+mod batch_tests;
 mod child_lifetime;
 mod commands;
 #[cfg(test)]
@@ -7,6 +9,7 @@ mod error;
 mod ffmpeg;
 mod formats;
 mod image_conversion;
+mod input_files;
 mod options;
 mod output_path;
 mod quit;
@@ -63,6 +66,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_catalog,
             commands::inspect_paths,
+            commands::inspect_input_paths,
             commands::convert_files,
             commands::cancel_conversion,
             commands::reveal_output,

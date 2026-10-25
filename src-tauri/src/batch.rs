@@ -142,15 +142,15 @@ async fn convert_queued_file(job: FileJob, parallel_limit: Arc<Semaphore>, conte
 
 // Removes the partial output if the conversion fails or is cancelled.
 async fn convert_one_file(job: &FileJob, context: &BatchContext) -> ConversionResult<PathBuf> {
-    let output_directory =
-        resolve_output_directory(&job.file.path, job.output_directory.as_deref())?;
+    let input_path = resolve_absolute_path(&job.file.path)?;
+    let output_directory = resolve_output_directory(&input_path, job.output_directory.as_deref())?;
     let output_path = reserve_output_path(
-        &job.file.path,
+        &input_path,
         &output_directory,
         job.settings.output_extension(),
     )?;
 
-    let conversion_result = run_conversion(job, &output_path, context)
+    let conversion_result = run_conversion(job, &input_path, &output_path, context)
         .await
         .and_then(|()| ensure_output_was_written(&output_path));
     if let Err(error) = conversion_result {
@@ -171,12 +171,23 @@ fn ensure_output_was_written(output_path: &Path) -> ConversionResult<()> {
     Ok(())
 }
 
+// The UI only sends absolute paths, from the file dialog or drag and drop.
+// Resolving them means links and ".." can't point the conversion elsewhere.
+fn resolve_absolute_path(path: &Path) -> ConversionResult<PathBuf> {
+    if !path.is_absolute() {
+        return Err(ConversionError::RelativePath);
+    }
+    let resolved_path = dunce::canonicalize(path)?;
+    Ok(resolved_path)
+}
+
+// `input_path` is already resolved.
 fn resolve_output_directory(
     input_path: &Path,
     chosen_directory: Option<&Path>,
 ) -> ConversionResult<PathBuf> {
     if let Some(chosen_directory) = chosen_directory {
-        return Ok(chosen_directory.to_path_buf());
+        return resolve_absolute_path(chosen_directory);
     }
 
     let source_directory = input_path.parent().map(Path::to_path_buf).ok_or_else(|| {
@@ -190,13 +201,14 @@ fn resolve_output_directory(
 
 async fn run_conversion(
     job: &FileJob,
+    input_path: &Path,
     output_path: &Path,
     context: &BatchContext,
 ) -> ConversionResult<()> {
     match job.settings {
         ConversionSettings::Image { format, options } => {
             let conversion = ImageConversion {
-                input_path: &job.file.path,
+                input_path,
                 output_path,
                 format,
                 options,
@@ -208,7 +220,7 @@ async fn run_conversion(
         }
         ConversionSettings::Video { format, options } => {
             let conversion = VideoConversion {
-                input_path: &job.file.path,
+                input_path,
                 output_path,
                 format,
                 options,

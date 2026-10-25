@@ -9,9 +9,13 @@ sidecar.
 1. On start, the UI calls `get_catalog`. The backend returns the platform, the input extensions
    and the output formats it offers. Format pickers and file filters are built from this, so a
    format only needs adding in `formats.rs`.
-2. Dropped or picked paths go to `inspect_paths`, which expands folders and classifies each file
-   as an image, a video or unsupported. Image files are added to the asset protocol scope so the
-   UI can show thumbnails. Nothing else is readable by the webview.
+2. Dropped or picked paths go to `inspect_input_paths`, which runs off the main thread. It
+   ignores paths that aren't absolute, resolves the rest (`input_files.rs`), expands folders and
+   classifies each file as an image, a video or unsupported. Symlinked folders inside a folder
+   are skipped, and it stops after 10,000 files, returning `isFileLimitReached: true`. Image
+   files are added to the asset protocol scope so the UI can show thumbnails. Nothing else is
+   readable by the webview. `inspect_paths` returns the same files without the flag, for the
+   UI until it moves to `inspect_input_paths`.
 3. **Convert** sends one `convert_files` request per kind (one for images, one for videos), each
    with its own settings. Both run at the same time.
 4. Each request is a batch. Images run in parallel, up to four at once or one per core if there are fewer. Videos run one at a time.
@@ -64,7 +68,8 @@ src/
   lib/components/ui/         shadcn-svelte components
 src-tauri/src/
   lib.rs                     App setup: plugins, window, logging, per-user scratch folder
-  commands.rs                Commands the UI calls, and folder expansion
+  commands.rs                Commands the UI calls
+  input_files.rs             Resolves added paths, expands folders and classifies files
   formats.rs                 The single list of supported inputs and outputs
   options.rs                 Conversion settings sent by the UI, and parallelism limits
   batch.rs                   Runs a batch, reports events, removes failed outputs
@@ -97,6 +102,9 @@ On Windows, FFmpeg is started without a console window.
 ## Security
 
 - The UI can't read files itself. It gets paths from the native file dialog or drag and drop, and
-  can load only the image previews granted by `inspect_paths`. Its permissions are in
-  `src-tauri/capabilities/default.json`.
+  can load only the image previews granted by `inspect_input_paths`: files whose resolved path
+  has an image extension. Its permissions are in `src-tauri/capabilities/default.json`.
+- Commands accept only absolute paths. Inputs and the output folder are resolved (symlinks and
+  `..` followed) before anything is read or written, and output names are always picked inside
+  the resolved folder.
 - The content security policy in `tauri.conf.json` blocks connections to other hosts.

@@ -642,6 +642,7 @@ dependencies = [
 name = "converter"
 version = "0.1.0"
 dependencies = [
+ "dunce",
  "hayro",
  "image 0.25.10",
  "log",
