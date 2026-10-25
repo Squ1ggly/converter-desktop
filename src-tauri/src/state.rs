@@ -17,25 +17,53 @@ pub struct AppState {
 
 #[derive(Default)]
 pub struct ActiveBatches {
-    cancellation_tokens: Mutex<HashMap<String, CancellationToken>>,
+    batches: Mutex<HashMap<String, BatchEntry>>,
+}
+
+struct BatchEntry {
+    cancellation: CancellationToken,
+    is_running: bool,
+}
+
+impl BatchEntry {
+    fn not_started() -> BatchEntry {
+        BatchEntry {
+            cancellation: CancellationToken::new(),
+            is_running: false,
+        }
+    }
 }
 
 impl ActiveBatches {
-    pub fn start(&self, batch_id: &str) -> CancellationToken {
-        let cancellation = CancellationToken::new();
-        lock_ignoring_poison(&self.cancellation_tokens)
-            .insert(batch_id.to_string(), cancellation.clone());
-        cancellation
+    // A cancel that arrived before the batch started is kept, so the batch
+    // starts already cancelled.
+    pub fn start(&self, batch_id: &str) -> Result<CancellationToken, String> {
+        let mut batches = lock_ignoring_poison(&self.batches);
+        let entry = batches
+            .entry(batch_id.to_string())
+            .or_insert_with(BatchEntry::not_started);
+
+        if entry.is_running {
+            return Err("This conversion is already running".to_string());
+        }
+        entry.is_running = true;
+
+        let cancellation = entry.cancellation.clone();
+        Ok(cancellation)
     }
 
     pub fn finish(&self, batch_id: &str) {
-        lock_ignoring_poison(&self.cancellation_tokens).remove(batch_id);
+        lock_ignoring_poison(&self.batches).remove(batch_id);
     }
 
+    // `convert_files` runs on the async runtime and `cancel_conversion` on the
+    // main thread, so a cancel can arrive before the batch has started.
     pub fn cancel(&self, batch_id: &str) {
-        if let Some(cancellation) = lock_ignoring_poison(&self.cancellation_tokens).get(batch_id) {
-            cancellation.cancel();
-        }
+        let mut batches = lock_ignoring_poison(&self.batches);
+        let entry = batches
+            .entry(batch_id.to_string())
+            .or_insert_with(BatchEntry::not_started);
+        entry.cancellation.cancel();
     }
 }
 
@@ -61,4 +89,40 @@ fn lock_ignoring_poison<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_cancel_that_arrives_first_still_cancels_the_batch() {
+        let active_batches = ActiveBatches::default();
+
+        active_batches.cancel("batch");
+        let cancellation = active_batches.start("batch").expect("starts");
+
+        assert!(cancellation.is_cancelled());
+    }
+
+    #[test]
+    fn a_running_batch_id_cannot_start_twice() {
+        let active_batches = ActiveBatches::default();
+        let first_run = active_batches.start("batch").expect("starts");
+
+        assert!(active_batches.start("batch").is_err());
+        active_batches.cancel("batch");
+        assert!(first_run.is_cancelled());
+    }
+
+    #[test]
+    fn a_finished_batch_id_starts_fresh() {
+        let active_batches = ActiveBatches::default();
+        active_batches.start("batch").expect("starts");
+        active_batches.finish("batch");
+
+        let second_run = active_batches.start("batch").expect("starts again");
+
+        assert!(!second_run.is_cancelled());
+    }
 }

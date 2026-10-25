@@ -129,11 +129,12 @@ pub async fn convert_files(
 ) -> Result<(), String> {
     let ffmpeg = state.ffmpeg.clone()?;
     let batch_id = request.batch_id.clone();
+    let cancellation = state.active_batches.start(&batch_id)?;
 
     let context = BatchContext {
         ffmpeg,
         scratch_root: state.scratch_root.clone(),
-        cancellation: state.active_batches.start(&batch_id),
+        cancellation,
         events: on_event,
         produced_outputs: state.produced_outputs.clone(),
     };
