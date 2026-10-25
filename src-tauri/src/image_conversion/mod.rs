@@ -40,7 +40,7 @@ pub async fn convert_image(conversion: ImageConversion<'_>) -> ConversionResult<
     let sized_image = if source.is_already_sized {
         source.image
     } else {
-        run_blocking(move || Ok(geometry::resize_image(source.image, resize))).await?
+        run_blocking(move || geometry::resize_image(source.image, resize)).await?
     };
     stop_if_cancelled(conversion.cancellation)?;
 

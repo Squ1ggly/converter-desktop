@@ -605,3 +605,160 @@ async fn cancelling_stops_ffmpeg() {
     assert!(matches!(run_result, Err(ConversionError::Cancelled)));
     assert!(started_at.elapsed() < std::time::Duration::from_secs(5));
 }
+
+fn assert_too_large(conversion_result: Result<PathBuf, ConversionError>, input: &str) {
+    assert!(
+        matches!(
+            conversion_result,
+            Err(ConversionError::ImageTooLarge | ConversionError::TargetTooLarge)
+        ),
+        "{input}: expected a size error, got {conversion_result:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn sizes_beyond_the_pixel_budget_fail_cleanly() {
+    let directory = tempfile::tempdir().unwrap();
+    let png_path = directory.path().join("small.png");
+    write_transparent_png(&png_path);
+    let unbounded_fit = ResizeOption::Fit {
+        max_width: Some(u32::MAX),
+        max_height: None,
+    };
+    let upscale_result =
+        convert_image_to(&png_path, ImageFormat::Png, unbounded_fit, directory.path()).await;
+    assert_too_large(upscale_result, "PNG fit to u32::MAX");
+
+    // 144 megapixels, drawn at the requested size before anything else.
+    let svg_path = directory.path().join("huge.svg");
+    std::fs::write(
+        &svg_path,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="12000" height="12000"/>"#,
+    )
+    .unwrap();
+    let svg_result = convert_image_to(
+        &svg_path,
+        ImageFormat::Png,
+        ResizeOption::Original,
+        directory.path(),
+    )
+    .await;
+    assert_too_large(svg_result, "12000 × 12000 SVG");
+
+    // A 1210 × 810 point page is 2521 × 1688 at 150 DPI, so 1000% is 425 megapixels.
+    let large_png_path = convert_image_to(
+        &png_path,
+        ImageFormat::Png,
+        ResizeOption::Percent { percent: 1000 },
+        directory.path(),
+    )
+    .await
+    .unwrap();
+    let pdf_path = convert_image_to(
+        &large_png_path,
+        ImageFormat::Pdf,
+        ResizeOption::Original,
+        directory.path(),
+    )
+    .await
+    .unwrap();
+    let pdf_result = convert_image_to(
+        &pdf_path,
+        ImageFormat::Png,
+        ResizeOption::Percent { percent: 1000 },
+        directory.path(),
+    )
+    .await;
+    assert_too_large(pdf_result, "PDF at 1000%");
+}
+
+// A BMP header that claims 20000 × 20000 pixels with no pixel data, so the
+// size has to be rejected from the header alone.
+fn write_bmp_header_only(path: &Path, width: u32, height: u32) {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(b"BM");
+    bytes.extend_from_slice(&54_u32.to_le_bytes());
+    bytes.extend_from_slice(&0_u32.to_le_bytes());
+    bytes.extend_from_slice(&54_u32.to_le_bytes());
+    bytes.extend_from_slice(&40_u32.to_le_bytes());
+    bytes.extend_from_slice(&width.to_le_bytes());
+    bytes.extend_from_slice(&height.to_le_bytes());
+    bytes.extend_from_slice(&1_u16.to_le_bytes());
+    bytes.extend_from_slice(&24_u16.to_le_bytes());
+    bytes.extend_from_slice(&[0; 24]);
+    std::fs::write(path, bytes).unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_source_beyond_the_pixel_budget_is_rejected_before_decoding() {
+    let directory = tempfile::tempdir().unwrap();
+    let bmp_path = directory.path().join("huge.bmp");
+    write_bmp_header_only(&bmp_path, 20_000, 20_000);
+
+    let conversion_result = convert_image_to(
+        &bmp_path,
+        ImageFormat::Png,
+        ResizeOption::Percent { percent: 1 },
+        directory.path(),
+    )
+    .await;
+
+    assert!(
+        matches!(conversion_result, Err(ConversionError::ImageTooLarge)),
+        "got {conversion_result:?}"
+    );
+}
+
+// Within the budget but wider than JPEG, GIF and WebP allow. Each output
+// either works or fails with an error, never a panic.
+#[tokio::test(flavor = "multi_thread")]
+async fn very_wide_images_convert_or_fail_cleanly() {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let directory = tempfile::tempdir().unwrap();
+    let wide_path = directory.path().join("wide.png");
+    RgbaImage::from_pixel(70_000, 2, Rgba([10, 120, 200, 255]))
+        .save(&wide_path)
+        .unwrap();
+
+    for format in image_outputs_for_this_platform() {
+        let conversion_result =
+            convert_image_to(&wide_path, format, ResizeOption::Original, directory.path()).await;
+        match conversion_result {
+            Ok(output_path) => assert_valid_output(&ffmpeg, &output_path).await,
+            Err(error) => {
+                let message = error.to_string();
+                assert!(!message.contains("panicked"), "{format:?}: {message}");
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn svg_transparency_keeps_its_colour() {
+    let directory = tempfile::tempdir().unwrap();
+    let svg_path = directory.path().join("half.svg");
+    std::fs::write(
+        &svg_path,
+        r##"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8">
+  <rect width="8" height="8" fill="#ff0000" fill-opacity="0.5"/>
+</svg>"##,
+    )
+    .unwrap();
+
+    let output_path = convert_image_to(
+        &svg_path,
+        ImageFormat::Png,
+        ResizeOption::Original,
+        directory.path(),
+    )
+    .await
+    .unwrap();
+
+    let pixel = image::open(&output_path)
+        .unwrap()
+        .to_rgba8()
+        .get_pixel(4, 4)
+        .0;
+    assert_eq!(pixel[0], 255, "colour was premultiplied: {pixel:?}");
+    assert!((127..=128).contains(&pixel[3]), "alpha: {pixel:?}");
+}

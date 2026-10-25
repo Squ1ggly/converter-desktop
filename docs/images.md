@@ -42,6 +42,10 @@ blank, the size is unchanged.
 
 SVG and PDF sources are drawn at the requested size, so they stay sharp when enlarged.
 
+Images can be up to 100 megapixels, for example 10,000 × 10,000 pixels, both as read and at the
+chosen size. A larger image, or a size that would make it larger, fails with a message instead
+of using up the computer's memory.
+
 ## Transparency
 
 PNG, WebP, AVIF and TIFF keep transparent areas. JPG, BMP and PDF can't store transparency, so

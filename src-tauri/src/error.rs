@@ -17,6 +17,12 @@ pub enum ConversionError {
     #[error("macOS could not write the HEIC file: {0}")]
     Heic(String),
 
+    #[error("This image is too large to convert")]
+    ImageTooLarge,
+
+    #[error("This image is too large to convert at that size. Choose a smaller size.")]
+    TargetTooLarge,
+
     #[error("Converting produced an empty file")]
     EmptyOutput,
 

@@ -11,6 +11,8 @@ written to the [log](settings-and-data.md#where-files-are-kept).
 | This file could not be read as an image: &lt;details&gt; | The file is damaged, or isn't really the format its extension says, and FFmpeg couldn't read it either | Open the file in another app to check it |
 | macOS could not write the HEIC file: &lt;details&gt; | The macOS HEIC encoder (`sips`) failed | Try another output format |
 | Could not trace this image into an SVG: &lt;details&gt; | Tracing failed | Try PNG instead, or a simpler image |
+| This image is too large to convert | The image is over 100 megapixels | Make it smaller in another app first |
+| This image is too large to convert at that size. Choose a smaller size. | **Scale** or **Fit** would make the image over 100 megapixels | Choose a smaller size |
 | Converting produced an empty file | The encoder finished without writing anything. The empty file is removed. | Try another output format, and report it with the log |
 | Too many files with this name already exist | Every name from `name.ext` to `name (10000).ext` is taken in the save folder | Choose another save folder, or tidy the folder |
 | A line from FFmpeg, for example "Error opening input file" | FFmpeg couldn't read or convert the file. The message is the most relevant line from its output. | Check the file opens in another app. Try another output format. |
