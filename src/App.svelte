@@ -170,7 +170,17 @@
     view = view === target ? "converter" : target;
   }
 
+  // Number fields save on change, which a shortcut's preventDefault skips.
+  // Blurring fires that change first, so the typed value is used.
+  function commitFocusedField(): void {
+    const focusedElement = document.activeElement;
+    if (focusedElement instanceof HTMLInputElement) {
+      focusedElement.blur();
+    }
+  }
+
   function convertFromAnyView(): void {
+    commitFocusedField();
     view = "converter";
     void startConversion();
   }
