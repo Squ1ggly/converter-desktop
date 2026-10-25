@@ -20,6 +20,9 @@ pub fn handle_run_event(app: &AppHandle, event: RunEvent) {
     let Some(state) = app.try_state::<AppState>() else {
         return;
     };
+    if !state.active_batches.is_any_running() {
+        return;
+    }
 
     state.active_batches.cancel_all();
     let has_finished = state

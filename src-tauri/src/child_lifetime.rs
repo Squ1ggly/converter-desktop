@@ -103,7 +103,13 @@ mod tests {
         let job = windows_job::kill_on_close_job().expect("job exists");
         let mut is_in_job = 0;
         // SAFETY: both handles are valid for the duration of the call.
-        unsafe { IsProcessInJob(child.raw_handle().unwrap(), job.handle(), &mut is_in_job) };
+        unsafe {
+            IsProcessInJob(
+                child.raw_handle().unwrap(),
+                job.handle(),
+                &raw mut is_in_job,
+            )
+        };
         let _ = child.kill().await;
         assert_ne!(is_in_job, 0);
     }
