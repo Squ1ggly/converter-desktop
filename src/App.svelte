@@ -248,6 +248,11 @@
   };
 
   function handleKeydown(event: KeyboardEvent): void {
+    // A held key repeats; each shortcut acts once. The quit dialog has its own keys.
+    if (event.repeat || isQuitDialogOpen) {
+      return;
+    }
+
     const shortcut = shortcutFor(event, platform);
     if (!shortcut) {
       return;

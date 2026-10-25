@@ -67,3 +67,18 @@ test("closing the window after a finished run just closes it", async ({ page }) 
   await expect.poll(async () => (await backend.readLog()).windowDestroys).toHaveLength(1);
   await expect(page.getByRole("alertdialog")).toBeHidden();
 });
+
+test("shortcuts do nothing while the quit dialog is open", async ({ page }) => {
+  const backend = await startConvertingTwoBatches(page);
+  await backend.requestWindowClose();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+
+  await page.keyboard.press("Meta+Comma");
+  await page.keyboard.press("F1");
+  await page.keyboard.press("Meta+O");
+
+  await expect(page.getByRole("banner").getByRole("button", { name: "Settings" })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("banner").getByRole("button", { name: "Help" })).toHaveAttribute("aria-pressed", "false");
+  const { dialogs } = await backend.readLog();
+  expect(dialogs).toEqual([]);
+});
