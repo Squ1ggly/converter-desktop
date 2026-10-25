@@ -29,12 +29,18 @@ jobs:
 
       # GitHub doesn't run workflows for PRs opened by Actions, so start CI on the
       # release PR here. Its checks then show on the PR like any other.
+      # The output is parsed here rather than with fromJSON(), which GitHub evaluates
+      # even for skipped steps and fails on when no release PR changed.
       - name: Run CI on the release PR
-        if: steps.release.outputs.prs_created == 'true' && steps.release.outputs.pr != ''
+        if: steps.release.outputs.prs_created == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
-        run: gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$RELEASE_BRANCH"
+          RELEASE_PR: ${{ steps.release.outputs.pr }}
+        run: |
+          release_branch=$(jq -r '.headBranchName // empty' <<< "$RELEASE_PR")
+          if [ -n "$release_branch" ]; then
+            gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$release_branch"
+          fi
 
   build:
     needs: release-please
