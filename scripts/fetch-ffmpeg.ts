@@ -1,9 +1,10 @@
 // Downloads FFmpeg for one platform into src-tauri/binaries/ for Tauri to bundle, or downloads
-// the FFmpeg source code the bundled builds were made from.
+// the FFmpeg source code that every bundled build was made from.
+// The Windows ARM64 build is a .7z archive, which needs 7-Zip (`7z`) on the PATH.
 //
 //   pnpm fetch-ffmpeg
 //   pnpm fetch-ffmpeg --target x86_64-pc-windows-msvc
-//   pnpm fetch-ffmpeg --sources <directory>
+//   pnpm fetch-ffmpeg --source <directory>
 //
 // Downloads are pinned and checked against a SHA-256 checksum.
 import { execFileSync } from "node:child_process";
@@ -13,12 +14,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { unzipSync } from "fflate";
 import {
-  distinctSources,
   FFMPEG_BUILDS,
+  FFMPEG_SOURCE,
+  FFMPEG_SOURCE_ARCHIVE_NAME,
+  FFMPEG_VERSION,
   type FfmpegBuild,
-  type FfmpegCommitSource,
-  type FfmpegSource,
-  sourceArchiveName,
 } from "./ffmpeg-builds.ts";
 
 const BINARIES_DIRECTORY = path.join(import.meta.dirname, "..", "src-tauri", "binaries");
@@ -62,14 +62,37 @@ async function downloadVerified(url: string, expectedSha256: string): Promise<Ui
   return downloadedBytes;
 }
 
-function extractExecutable(archiveBytes: Uint8Array, entryPath: string): Uint8Array {
+function extractFromZip(archiveBytes: Uint8Array, entryPath: string): Uint8Array | undefined {
   const extractedEntries = unzipSync(archiveBytes, {
     filter: (entry) => entry.name === entryPath,
   });
   const executableBytes = extractedEntries[entryPath];
+  return executableBytes;
+}
 
-  if (!executableBytes) {
-    throw new Error(`${entryPath} was not found inside the downloaded archive`);
+async function extractFrom7z(archiveBytes: Uint8Array, entryPath: string): Promise<Uint8Array> {
+  const workDirectory = await mkdtemp(path.join(tmpdir(), "ffmpeg-archive-"));
+  const archivePath = path.join(workDirectory, "ffmpeg.7z");
+
+  try {
+    await writeFile(archivePath, archiveBytes);
+    const executableBytes = execFileSync("7z", ["e", "-so", archivePath, entryPath], {
+      maxBuffer: 1024 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    return new Uint8Array(executableBytes);
+  } finally {
+    await rm(workDirectory, { recursive: true, force: true });
+  }
+}
+
+async function extractExecutable(build: FfmpegBuild, archiveBytes: Uint8Array): Promise<Uint8Array> {
+  const executableBytes = build.url.endsWith(".7z")
+    ? await extractFrom7z(archiveBytes, build.entryPath)
+    : extractFromZip(archiveBytes, build.entryPath);
+
+  if (!executableBytes || executableBytes.length === 0) {
+    throw new Error(`${build.entryPath} was not found inside the downloaded archive`);
   }
 
   return executableBytes;
@@ -89,9 +112,9 @@ function findBuild(target: string): FfmpegBuild {
 async function fetchExecutable(target: string): Promise<void> {
   const build = findBuild(target);
 
-  console.log(`Downloading FFmpeg ${build.source.version} for ${target}`);
+  console.log(`Downloading FFmpeg ${FFMPEG_VERSION} for ${target}`);
   const archiveBytes = await downloadVerified(build.url, build.sha256);
-  const executableBytes = extractExecutable(archiveBytes, build.entryPath);
+  const executableBytes = await extractExecutable(build, archiveBytes);
 
   // Tauri expects sidecars named "<name>-<target triple>[.exe]".
   const executableSuffix = target.includes("windows") ? ".exe" : "";
@@ -104,49 +127,22 @@ async function fetchExecutable(target: string): Promise<void> {
   console.log(`Saved ${path.relative(process.cwd(), outputPath)}`);
 }
 
-// Git checks the commit hash, so the snapshot needs no separate checksum.
-async function archiveCommit(source: FfmpegCommitSource, outputPath: string): Promise<void> {
-  const repositoryDirectory = await mkdtemp(path.join(tmpdir(), "ffmpeg-source-"));
-  const runGit = (gitArguments: string[]) => {
-    execFileSync("git", gitArguments, { cwd: repositoryDirectory, stdio: "inherit" });
-  };
+async function fetchSource(outputDirectory: string): Promise<void> {
+  console.log(`Downloading the FFmpeg ${FFMPEG_VERSION} source`);
+  const tarballBytes = await downloadVerified(FFMPEG_SOURCE.url, FFMPEG_SOURCE.sha256);
+  const outputPath = path.resolve(outputDirectory, FFMPEG_SOURCE_ARCHIVE_NAME);
 
-  try {
-    runGit(["init", "--quiet"]);
-    runGit(["fetch", "--quiet", "--depth", "1", source.repository, source.commit]);
-    runGit(["archive", "--format", "tar.gz", "--prefix", `ffmpeg-${source.version}/`, "--output", outputPath, source.commit]);
-  } finally {
-    await rm(repositoryDirectory, { recursive: true, force: true });
-  }
-}
-
-async function fetchSource(source: FfmpegSource, outputDirectory: string): Promise<void> {
-  const outputPath = path.resolve(outputDirectory, sourceArchiveName(source));
-  console.log(`Downloading the FFmpeg ${source.version} source`);
-
-  if (source.kind === "commit") {
-    await archiveCommit(source, outputPath);
-  } else {
-    const tarballBytes = await downloadVerified(source.url, source.sha256);
-    await writeFile(outputPath, tarballBytes);
-  }
+  await mkdir(outputDirectory, { recursive: true });
+  await writeFile(outputPath, tarballBytes);
 
   console.log(`Saved ${path.relative(process.cwd(), outputPath)}`);
 }
 
-async function fetchSources(outputDirectory: string): Promise<void> {
-  await mkdir(outputDirectory, { recursive: true });
-
-  for (const source of distinctSources()) {
-    await fetchSource(source, outputDirectory);
-  }
-}
-
 async function main(): Promise<void> {
-  const sourcesDirectory = readFlagValue("--sources");
+  const sourceDirectory = readFlagValue("--source");
 
-  if (sourcesDirectory) {
-    await fetchSources(sourcesDirectory);
+  if (sourceDirectory) {
+    await fetchSource(sourceDirectory);
     return;
   }
 

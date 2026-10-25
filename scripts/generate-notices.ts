@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { build, type Plugin } from "vite";
-import { distinctSources, FFMPEG_BUILDS, type FfmpegSource, sourceArchiveName } from "./ffmpeg-builds.ts";
+import { FFMPEG_BUILDS, FFMPEG_SOURCE, FFMPEG_SOURCE_ARCHIVE_NAME, FFMPEG_VERSION } from "./ffmpeg-builds.ts";
 
 const ROOT_DIRECTORY = path.join(import.meta.dirname, "..");
 const NOTICES_PATH = path.join(ROOT_DIRECTORY, "THIRD-PARTY-NOTICES.md");
@@ -195,31 +195,21 @@ function packageTable(packages: ThirdPartyPackage[]): string {
   return table;
 }
 
-function describeSource(source: FfmpegSource): string {
-  const origin =
-    source.kind === "release"
-      ? `the FFmpeg ${source.version} release from ${source.url}`
-      : `FFmpeg commit \`${source.commit}\` from ${source.repository}`;
-  const description = `- \`${sourceArchiveName(source)}\`: ${origin}`;
-  return description;
-}
-
 function ffmpegSection(): string {
   const buildRows = Object.entries(FFMPEG_BUILDS).map(
     ([target, ffmpegBuild]) =>
-      `| ${ffmpegBuild.platformName} | ${ffmpegBuild.source.version} | [${ffmpegBuild.builder.name}](${ffmpegBuild.builder.buildScriptsUrl}) | \`ffmpeg-buildconf-${target}.txt\` |`,
+      `| ${ffmpegBuild.platformName} | [${ffmpegBuild.builder.name}](${ffmpegBuild.builder.buildScriptsUrl}) | \`ffmpeg-buildconf-${target}.txt\` |`,
   );
-  const sourceLines = distinctSources().map(describeSource);
 
   const section = `## FFmpeg
 
-Converter converts files by running [FFmpeg](https://ffmpeg.org), which is installed next to the
-app as a separate program named \`converter-ffmpeg\`. FFmpeg is licensed under the GNU General
-Public License, version 3 or later. The installers include the licence as
+Converter converts files by running [FFmpeg](https://ffmpeg.org) ${FFMPEG_VERSION}, which is installed
+next to the app as a separate program named \`converter-ffmpeg\`. FFmpeg is licensed under the GNU
+General Public License, version 3 or later. The installers include the licence as
 \`licenses/FFmpeg/COPYING.GPLv3\` and FFmpeg's own licensing notes as \`licenses/FFmpeg/LICENSE.md\`.
 
-| Platform | FFmpeg version | Built by | Build configuration |
-|---|---|---|---|
+| Platform | Built by | Build configuration |
+|---|---|---|
 ${buildRows.join("\n")}
 
 ### Source code
@@ -227,7 +217,7 @@ ${buildRows.join("\n")}
 Every [Converter release](${REPOSITORY_URL}/releases) has these files attached next to its
 installers:
 
-${sourceLines.join("\n")}
+- \`${FFMPEG_SOURCE_ARCHIVE_NAME}\`: the FFmpeg ${FFMPEG_VERSION} source, as published at ${FFMPEG_SOURCE.url}
 - \`ffmpeg-buildconf-<target>.txt\`: the configuration each build was made with, as printed by
   \`converter-ffmpeg -buildconf\`
 

@@ -1,24 +1,11 @@
-// The FFmpeg builds bundled with the app, one per target, and the source each was built from.
+// The FFmpeg builds bundled with the app, one per target, and the source they were built from.
 // scripts/fetch-ffmpeg.ts downloads them and scripts/generate-notices.ts lists them in
 // THIRD-PARTY-NOTICES.md.
 
-// A released FFmpeg version, published as a tarball on ffmpeg.org.
-export interface FfmpegReleaseSource {
-  kind: "release";
-  version: string;
+export interface FfmpegSource {
   url: string;
   sha256: string;
 }
-
-// An FFmpeg git commit, for builds made from a release branch rather than a release.
-export interface FfmpegCommitSource {
-  kind: "commit";
-  version: string;
-  repository: string;
-  commit: string;
-}
-
-export type FfmpegSource = FfmpegReleaseSource | FfmpegCommitSource;
 
 export interface FfmpegBuilder {
   name: string;
@@ -29,28 +16,19 @@ export interface FfmpegBuilder {
 export interface FfmpegBuild {
   platformName: string;
   builder: FfmpegBuilder;
+  // A .zip or .7z archive.
   url: string;
   sha256: string;
-  // Path of the ffmpeg executable inside the zip.
+  // Path of the ffmpeg executable inside the archive.
   entryPath: string;
-  source: FfmpegSource;
 }
 
 export const FFMPEG_VERSION = "9.0.2";
 
-const RELEASE_SOURCE: FfmpegReleaseSource = {
-  kind: "release",
-  version: FFMPEG_VERSION,
+// Every build below is made from this release.
+export const FFMPEG_SOURCE: FfmpegSource = {
   url: `https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz`,
   sha256: "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e",
-};
-
-// BtbN builds the 9.0 release branch rather than releases, so its version is a branch snapshot.
-const BTBN_SOURCE: FfmpegCommitSource = {
-  kind: "commit",
-  version: "n9.0.1-11-ge47273f4d9",
-  repository: "https://github.com/FFmpeg/FFmpeg",
-  commit: "e47273f4d9227152dcbf543cebaf9e2430ddbcc4",
 };
 
 const MARTIN_RIEDL: FfmpegBuilder = {
@@ -63,16 +41,13 @@ const GYAN: FfmpegBuilder = {
   buildScriptsUrl: "https://www.gyan.dev/ffmpeg/builds/",
 };
 
-// The last build of each month is kept for two years, so pin one of those, not a daily build.
-// The Windows ARM64 builds from 2026-09-24 to 2026-10-03 crash on start
-// (https://github.com/BtbN/FFmpeg-Builds/issues/675), so this is the August one.
-const BTBN_RELEASE_TAG = "autobuild-2026-08-31-13-27";
-const BTBN_ARCHIVE_NAME = `ffmpeg-${BTBN_SOURCE.version}-winarm64-gpl-9.0`;
-
-const BTBN: FfmpegBuilder = {
-  name: "BtbN",
-  buildScriptsUrl: `https://github.com/BtbN/FFmpeg-Builds/tree/${BTBN_RELEASE_TAG}`,
+// BtbN's Windows ARM64 builds leave out libvpx and libaom, which WebM and AVIF need.
+const TORDONA: FfmpegBuilder = {
+  name: "tordona",
+  buildScriptsUrl: `https://github.com/tordona/ffmpeg-win-arm64/tree/${FFMPEG_VERSION}`,
 };
+
+const TORDONA_ARCHIVE_NAME = `ffmpeg-${FFMPEG_VERSION}-essentials-static-win-arm64`;
 
 export const FFMPEG_BUILDS: Record<string, FfmpegBuild> = {
   "aarch64-apple-darwin": {
@@ -81,7 +56,6 @@ export const FFMPEG_BUILDS: Record<string, FfmpegBuild> = {
     url: "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip",
     sha256: "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924",
     entryPath: "ffmpeg",
-    source: RELEASE_SOURCE,
   },
   "x86_64-apple-darwin": {
     platformName: "macOS, Intel",
@@ -89,7 +63,6 @@ export const FFMPEG_BUILDS: Record<string, FfmpegBuild> = {
     url: "https://ffmpeg.martin-riedl.de/download/macos/amd64/1789931006_9.0.2/ffmpeg.zip",
     sha256: "7c6b4125b191cbf773832dc51f424cf2b6bb7da43007d1e066f95909e47cacd4",
     entryPath: "ffmpeg",
-    source: RELEASE_SOURCE,
   },
   "x86_64-pc-windows-msvc": {
     platformName: "Windows x64",
@@ -97,15 +70,13 @@ export const FFMPEG_BUILDS: Record<string, FfmpegBuild> = {
     url: `https://github.com/GyanD/codexffmpeg/releases/download/${FFMPEG_VERSION}/ffmpeg-${FFMPEG_VERSION}-essentials_build.zip`,
     sha256: "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
     entryPath: `ffmpeg-${FFMPEG_VERSION}-essentials_build/bin/ffmpeg.exe`,
-    source: RELEASE_SOURCE,
   },
   "aarch64-pc-windows-msvc": {
     platformName: "Windows ARM64",
-    builder: BTBN,
-    url: `https://github.com/BtbN/FFmpeg-Builds/releases/download/${BTBN_RELEASE_TAG}/${BTBN_ARCHIVE_NAME}.zip`,
-    sha256: "7e6142ae4d04b35123eba48d91bb2c559ef43b49a6b3857f7324bbcf7266d18b",
-    entryPath: `${BTBN_ARCHIVE_NAME}/bin/ffmpeg.exe`,
-    source: BTBN_SOURCE,
+    builder: TORDONA,
+    url: `https://github.com/tordona/ffmpeg-win-arm64/releases/download/${FFMPEG_VERSION}/${TORDONA_ARCHIVE_NAME}.7z`,
+    sha256: "5319165d85ecee87360166dc0198b6de7747be6ce7a97a9f59b3920eddb6a3c3",
+    entryPath: `${TORDONA_ARCHIVE_NAME}/bin/ffmpeg.exe`,
   },
   "x86_64-unknown-linux-gnu": {
     platformName: "Linux x64",
@@ -113,7 +84,6 @@ export const FFMPEG_BUILDS: Record<string, FfmpegBuild> = {
     url: "https://ffmpeg.martin-riedl.de/download/linux/amd64/1789931100_9.0.2/ffmpeg.zip",
     sha256: "fa8ecf4abbd290d98f7d188b8649cc6b391ae209a98452be955a15aab1909d7f",
     entryPath: "ffmpeg",
-    source: RELEASE_SOURCE,
   },
   "aarch64-unknown-linux-gnu": {
     platformName: "Linux ARM64",
@@ -121,23 +91,8 @@ export const FFMPEG_BUILDS: Record<string, FfmpegBuild> = {
     url: "https://ffmpeg.martin-riedl.de/download/linux/arm64/1789931697_9.0.2/ffmpeg.zip",
     sha256: "93a76ae90db5474eecdf951a729857c64f3de23567228d6a7d5e6e8e3cd1021b",
     entryPath: "ffmpeg",
-    source: RELEASE_SOURCE,
   },
 };
 
-// The file name each source is published under on the GitHub release.
-export function sourceArchiveName(source: FfmpegSource): string {
-  const extension = source.kind === "release" ? "tar.xz" : "tar.gz";
-  const archiveName = `ffmpeg-${source.version}.${extension}`;
-  return archiveName;
-}
-
-export function distinctSources(): FfmpegSource[] {
-  const sourcesByVersion = new Map<string, FfmpegSource>();
-  for (const build of Object.values(FFMPEG_BUILDS)) {
-    sourcesByVersion.set(build.source.version, build.source);
-  }
-
-  const sources = [...sourcesByVersion.values()];
-  return sources;
-}
+// The file name the source is published under on each GitHub release.
+export const FFMPEG_SOURCE_ARCHIVE_NAME = `ffmpeg-${FFMPEG_VERSION}.tar.xz`;

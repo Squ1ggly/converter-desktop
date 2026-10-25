@@ -146,8 +146,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  ffmpeg-sources:
-    name: FFmpeg sources
+  ffmpeg-source:
+    name: FFmpeg source
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -155,21 +155,21 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - name: Download the FFmpeg sources
-        run: pnpm fetch-ffmpeg --sources ffmpeg-sources
+      - name: Download the FFmpeg source
+        run: pnpm fetch-ffmpeg --source ffmpeg-source
 
       - name: Check the bundled licence files match the FFmpeg source
         run: |
-          release_tarball=$(find ffmpeg-sources -name 'ffmpeg-*.tar.xz')
-          release_directory=$(basename "$release_tarball" .tar.xz)
+          source_tarball=$(find ffmpeg-source -name 'ffmpeg-*.tar.xz')
+          source_directory=$(basename "$source_tarball" .tar.xz)
           for licence_file in COPYING.GPLv3 LICENSE.md; do
-            tar -xJOf "$release_tarball" "$release_directory/$licence_file" | cmp - "licenses/FFmpeg/$licence_file"
+            tar -xJOf "$source_tarball" "$source_directory/$licence_file" | cmp - "licenses/FFmpeg/$licence_file"
           done
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ffmpeg-sources
-          path: ffmpeg-sources/
+          name: ffmpeg-source
+          path: ffmpeg-source/
           if-no-files-found: error
           retention-days: 14
 

@@ -2,7 +2,7 @@ name: Release
 
 # On main, release-please keeps a release PR up to date. Merging it tags the commit and creates a
 # draft release. The installers are then built and tested on every platform, attached to the
-# draft with the FFmpeg sources, and the release is published only if every job passed.
+# draft with the FFmpeg source, and the release is published only if every job passed.
 # "Run workflow" builds and tests the installers without releasing.
 on:
   push:
@@ -80,7 +80,7 @@ jobs:
           path: release-assets
           merge-multiple: true
 
-      - name: Attach the installers and FFmpeg sources to the draft release
+      - name: Attach the installers and the FFmpeg source to the draft release
         run: gh release upload "$TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
 
       - name: Publish the release
