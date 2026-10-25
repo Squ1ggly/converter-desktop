@@ -81,7 +81,7 @@ impl ConversionSettings {
 const MAX_PARALLEL_IMAGES: usize = 4;
 
 fn parallel_image_limit() -> usize {
-    let available_cores = std::thread::available_parallelism().map_or(1, |cores| cores.get());
+    let available_cores = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
     let limit = available_cores.clamp(1, MAX_PARALLEL_IMAGES);
     limit
 }

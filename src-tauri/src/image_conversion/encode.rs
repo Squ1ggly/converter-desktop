@@ -16,6 +16,10 @@ use crate::formats::ImageFormat;
 
 // Larger images are shrunk before tracing; cost grows with pixel count.
 const MAX_SVG_TRACE_LENGTH: u32 = 2000;
+// FFmpeg's default for these extensions is the image2 muxer, which reads "%d"
+// in a file name as a frame number. These muxers write exactly one file.
+const WEBP_MUXER: &str = "webp";
+const AVIF_MUXER: &str = "avif";
 // Quality 1–100 maps to CRF 62–8 (AVIF's range is 0–63).
 const AVIF_BEST_CRF: f32 = 8.0;
 const AVIF_WORST_CRF: f32 = 62.0;
@@ -97,12 +101,15 @@ fn write_pdf(image: &DynamicImage, quality: u8, output_path: &Path) -> Conversio
     let mut jpeg_bytes = Vec::new();
     JpegEncoder::new_with_quality(&mut jpeg_bytes, quality).encode_image(&flattened_image)?;
 
-    let pdf_bytes = build_single_image_pdf(&jpeg_bytes, width, height);
+    let pdf_bytes = build_single_image_pdf(&jpeg_bytes, width, height)?;
     std::fs::write(output_path, pdf_bytes)?;
     Ok(())
 }
 
-fn build_single_image_pdf(jpeg_bytes: &[u8], width: u32, height: u32) -> Vec<u8> {
+fn build_single_image_pdf(jpeg_bytes: &[u8], width: u32, height: u32) -> ConversionResult<Vec<u8>> {
+    // PDF stores image sizes as signed 32-bit numbers.
+    let pdf_width = i32::try_from(width).map_err(|_| ConversionError::ImageTooLarge)?;
+    let pdf_height = i32::try_from(height).map_err(|_| ConversionError::ImageTooLarge)?;
     let catalog_id = Ref::new(1);
     let page_tree_id = Ref::new(2);
     let page_id = Ref::new(3);
@@ -125,8 +132,8 @@ fn build_single_image_pdf(jpeg_bytes: &[u8], width: u32, height: u32) -> Vec<u8>
 
     let mut image_object = pdf.image_xobject(image_id, jpeg_bytes);
     image_object.filter(Filter::DctDecode);
-    image_object.width(width as i32);
-    image_object.height(height as i32);
+    image_object.width(pdf_width);
+    image_object.height(pdf_height);
     image_object.color_space().device_rgb();
     image_object.bits_per_component(8);
     image_object.finish();
@@ -139,7 +146,7 @@ fn build_single_image_pdf(jpeg_bytes: &[u8], width: u32, height: u32) -> Vec<u8>
     pdf.stream(content_id, &content.finish());
 
     let pdf_bytes = pdf.finish();
-    pdf_bytes
+    Ok(pdf_bytes)
 }
 
 fn write_svg(image: DynamicImage, output_path: &Path) -> ConversionResult<()> {
@@ -164,13 +171,14 @@ fn webp_arguments(quality: u8) -> Vec<OsString> {
         "libwebp".into(),
         "-quality".into(),
         quality.to_string().into(),
+        "-f".into(),
+        WEBP_MUXER.into(),
     ];
     arguments
 }
 
 fn avif_arguments(quality: u8, has_transparency: bool) -> Vec<OsString> {
-    let quality_fraction = (quality as f32 - 1.0) / 99.0;
-    let crf = (AVIF_WORST_CRF - quality_fraction * (AVIF_WORST_CRF - AVIF_BEST_CRF)).round() as u32;
+    let crf = avif_crf(quality);
 
     // AVIF stores alpha as a second greyscale image.
     let mut arguments: Vec<OsString> = if has_transparency {
@@ -196,8 +204,21 @@ fn avif_arguments(quality: u8, has_transparency: bool) -> Vec<OsString> {
         crf.to_string().into(),
         "-cpu-used".into(),
         AVIF_ENCODER_SPEED.into(),
+        "-f".into(),
+        AVIF_MUXER.into(),
     ]);
     arguments
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the result is between AVIF_BEST_CRF and AVIF_WORST_CRF"
+)]
+fn avif_crf(quality: u8) -> u32 {
+    let quality_fraction = (f32::from(quality) - 1.0) / 99.0;
+    let crf = (AVIF_WORST_CRF - quality_fraction * (AVIF_WORST_CRF - AVIF_BEST_CRF)).round() as u32;
+    crf
 }
 
 // For formats the Rust image crates can't encode well (lossy WebP, AVIF).
@@ -246,7 +267,7 @@ async fn write_heic(image: DynamicImage, quality: u8, job: &EncodeJob<'_>) -> Co
 
     let output = tokio::select! {
         output = command.output() => output?,
-        _ = job.cancellation.cancelled() => return Err(ConversionError::Cancelled),
+        () = job.cancellation.cancelled() => return Err(ConversionError::Cancelled),
     };
 
     if output.status.success() {
@@ -282,8 +303,17 @@ mod tests {
     }
 
     #[test]
+    fn pdf_sizes_beyond_what_pdf_can_store_are_an_error() {
+        let too_wide = u32::try_from(i32::MAX).unwrap() + 1;
+
+        let build_result = build_single_image_pdf(b"", too_wide, 1);
+
+        assert!(matches!(build_result, Err(ConversionError::ImageTooLarge)));
+    }
+
+    #[test]
     fn pdf_output_is_a_well_formed_document() {
-        let pdf_bytes = build_single_image_pdf(b"not-really-a-jpeg", 40, 20);
+        let pdf_bytes = build_single_image_pdf(b"not-really-a-jpeg", 40, 20).unwrap();
         assert!(pdf_bytes.starts_with(b"%PDF-"));
         assert!(
             pdf_bytes

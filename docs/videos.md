@@ -52,4 +52,7 @@ faster videos drop frames to match it, and slower ones keep their own frame rate
 - Audio is removed.
 - The colour palette is built from the clip itself, so colours stay close to the original.
 - With frame rate set to **Original**, GIFs use at most 15 fps.
-- Resolution works as above. Long or large clips make very large GIFs.
+- GIFs are at most 480 pixels on the shorter side, so **Resolution** choices above **480p** make no
+  difference. Long clips still make large files.
+- The video is read twice, once to build the palette and once to write the GIF. The percentage
+  covers both.
