@@ -8,10 +8,10 @@ mod formats;
 mod image_conversion;
 mod options;
 mod output_path;
+mod scratch;
 mod state;
 mod video_conversion;
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use tauri::{App, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -53,7 +53,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .setup(|app| {
-            let app_state = create_app_state(app)?;
+            let app_state = create_app_state(app);
             app.manage(app_state);
             create_main_window(app)?;
             Ok(())
@@ -91,31 +91,25 @@ fn create_main_window(app: &App) -> tauri::Result<()> {
     Ok(())
 }
 
-fn create_app_state(app: &App) -> Result<AppState, Box<dyn std::error::Error>> {
+fn create_app_state(app: &App) -> AppState {
     let ffmpeg = Ffmpeg::locate().map_err(|error| error.to_string());
     if let Err(message) = &ffmpeg {
         log::error!("{message}");
     }
 
+    // Without a cache folder, scratch files go in the system's temporary folder.
+    let cache_directory = app
+        .path()
+        .app_cache_dir()
+        .unwrap_or_else(|_| std::env::temp_dir());
+
     let app_state = AppState {
         ffmpeg,
-        scratch_root: prepare_scratch_root(app)?,
+        scratch_root: scratch::prepare_scratch_root(&cache_directory),
         active_batches: ActiveBatches::default(),
         produced_outputs: Arc::new(ProducedOutputs::default()),
     };
-    Ok(app_state)
-}
-
-// Per-user scratch folder, cleared on launch.
-fn prepare_scratch_root(app: &App) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let scratch_root = app.path().app_cache_dir()?.join("scratch");
-
-    if scratch_root.exists() {
-        std::fs::remove_dir_all(&scratch_root)?;
-    }
-    std::fs::create_dir_all(&scratch_root)?;
-
-    Ok(scratch_root)
+    app_state
 }
 
 fn focus_main_window(app: &AppHandle) {

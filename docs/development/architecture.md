@@ -31,8 +31,10 @@ Every image goes through decode, resize and encode, so any input can become any 
 | Resize | Lanczos3. SVG and PDF are rendered straight at the target size instead. |
 | Encode | The `image` crate for JPG, PNG, GIF, BMP and TIFF. FFmpeg for WebP (`libwebp`) and AVIF (`libaom-av1`). `pdf-writer` for PDF. `vtracer` for SVG. macOS `sips` for HEIC. |
 
-Intermediate files go in a temporary folder under the per-user scratch folder, which is emptied
-on every launch.
+Intermediate files go in a temporary folder inside this launch's own folder under the per-user
+scratch folder. `scratch.rs` deletes earlier launches' folders at startup. Anything it can't
+delete, such as a file another process still has open, is logged and left for a later launch, so
+it never stops the app from starting.
 
 ## Videos
 
@@ -61,6 +63,7 @@ src-tauri/src/
   options.rs                 Conversion settings sent by the UI, and parallelism limits
   batch.rs                   Runs a batch, reports events, removes failed outputs
   output_path.rs             Picks and reserves a free output name
+  scratch.rs                 Clears old scratch files and makes this launch's scratch folder
   image_conversion/          decode.rs, geometry.rs (resize, flatten onto white), encode.rs
   video_conversion.rs        FFmpeg arguments for each video format
   ffmpeg.rs                  Runs the bundled FFmpeg with progress and cancellation
