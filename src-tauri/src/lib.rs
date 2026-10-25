@@ -19,7 +19,8 @@ mod video_conversion;
 
 use std::sync::Arc;
 
-use tauri::{App, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::window::Color;
+use tauri::{App, AppHandle, Manager, Theme, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_log::{Target, TargetKind};
 
 use crate::ffmpeg::Ffmpeg;
@@ -27,6 +28,11 @@ use crate::state::{ActiveBatches, AppState, ProducedOutputs};
 
 // Must match the window listed in capabilities/default.json.
 pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
+
+// --background in src/app.css (oklch(1 0 0) and oklch(0.145 0 0)) as sRGB.
+// Shown until the page has loaded, so a dark window doesn't flash white.
+const LIGHT_BACKGROUND: Color = Color(255, 255, 255, 255);
+const DARK_BACKGROUND: Color = Color(10, 10, 10, 255);
 
 // Centres the window buttons in the 52px toolbar (h-13 in Toolbar.svelte).
 // Measured: macOS offsets the buttons from this point, so it isn't (52 - 14) / 2.
@@ -104,8 +110,21 @@ fn create_main_window(app: &App) -> tauri::Result<()> {
             TRAFFIC_LIGHT_POSITION.1,
         ));
 
-    window_builder.build()?;
+    // Hidden until its background matches the system theme.
+    let window = window_builder.visible(false).build()?;
+    let background = background_for_theme(window.theme().unwrap_or(Theme::Light));
+    window.set_background_color(Some(background))?;
+    window.show()?;
     Ok(())
+}
+
+fn background_for_theme(theme: Theme) -> Color {
+    let background = if theme == Theme::Dark {
+        DARK_BACKGROUND
+    } else {
+        LIGHT_BACKGROUND
+    };
+    background
 }
 
 fn create_app_state(app: &App) -> AppState {
@@ -135,4 +154,23 @@ pub(crate) fn focus_main_window(app: &AppHandle) {
     };
     let _ = window.unminimize();
     let _ = window.set_focus();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The window colours are copies of the page's, so a theme change has to
+    // update both.
+    #[test]
+    fn window_backgrounds_match_the_page_theme() {
+        let stylesheet_path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/app.css");
+        let stylesheet = std::fs::read_to_string(stylesheet_path).unwrap();
+
+        assert!(stylesheet.contains("--background: oklch(1 0 0);"));
+        assert!(stylesheet.contains("--background: oklch(0.145 0 0);"));
+        assert_eq!(background_for_theme(Theme::Light), LIGHT_BACKGROUND);
+        assert_eq!(background_for_theme(Theme::Dark), DARK_BACKGROUND);
+    }
 }
