@@ -10,7 +10,8 @@ Under **Save to** in the settings panel:
 | Another folder | Into one folder you choose. Selecting this opens a folder picker; **Change** picks a different folder. |
 
 If you cancel the folder picker, the previous choice stays. The chosen folder is remembered
-between launches.
+between launches. A long path is shortened from the start so the folder's name stays visible;
+point at it to see the full path.
 
 ## File names
 

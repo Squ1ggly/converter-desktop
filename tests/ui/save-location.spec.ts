@@ -73,3 +73,61 @@ test("switching back to the same folder stops using the chosen folder", async ({
   const outputDirectory = await convertAndReadOutputDirectory(page, backend);
   expect(outputDirectory).toBeNull();
 });
+
+interface CharacterPositions {
+  firstCharacterLeft: number;
+  lastCharacterRight: number;
+  boxLeft: number;
+  boxRight: number;
+}
+
+// Where the path's first and last characters are drawn, to check their order on screen.
+async function readCharacterPositions(page: Page, folderPath: string): Promise<CharacterPositions> {
+  const pathText = page.getByText(folderPath, { exact: true });
+  const positions = await pathText.evaluate((element) => {
+    const textNode = document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode();
+    if (!(textNode instanceof Text)) {
+      throw new Error("The folder path has no text");
+    }
+    const text = textNode.data;
+    const firstCharacter = document.createRange();
+    firstCharacter.setStart(textNode, text.indexOf("/"));
+    firstCharacter.setEnd(textNode, text.indexOf("/") + 1);
+    const lastCharacter = document.createRange();
+    lastCharacter.setStart(textNode, text.trimEnd().length - 1);
+    lastCharacter.setEnd(textNode, text.trimEnd().length);
+    const box = element.getBoundingClientRect();
+    return {
+      firstCharacterLeft: firstCharacter.getBoundingClientRect().left,
+      lastCharacterRight: lastCharacter.getBoundingClientRect().right,
+      boxLeft: box.left,
+      boxRight: box.right,
+    };
+  });
+  return positions;
+}
+
+test("the chosen folder reads left to right, starting with its slash", async ({ page }) => {
+  const backend = await launchWithFiles(page, [BEACH_PHOTO]);
+  await backend.answerNextDialog(EXPORT_FOLDER);
+  await page.getByRole("radio", { name: "Another folder" }).click();
+
+  const positions = await readCharacterPositions(page, EXPORT_FOLDER);
+
+  expect(positions.firstCharacterLeft).toBeLessThan(positions.lastCharacterRight);
+  expect(Math.abs(positions.firstCharacterLeft - positions.boxLeft)).toBeLessThan(2);
+});
+
+test("a long folder path keeps its end in view and shows in full on hover", async ({ page }) => {
+  const longFolder = "/Users/sam/Library/Mobile Documents/com~apple~CloudDocs/Projects/2026/Client work/Exports/Converted";
+  const backend = await launchWithFiles(page, [BEACH_PHOTO]);
+  await backend.answerNextDialog(longFolder);
+  await page.getByRole("radio", { name: "Another folder" }).click();
+
+  const positions = await readCharacterPositions(page, longFolder);
+  expect(positions.lastCharacterRight).toBeLessThanOrEqual(positions.boxRight + 1);
+  expect(positions.lastCharacterRight).toBeGreaterThan(positions.boxLeft);
+
+  await page.getByText(longFolder, { exact: true }).hover();
+  await expect(page.locator("[data-slot=tooltip-content]")).toContainText(longFolder);
+});

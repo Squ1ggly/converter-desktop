@@ -4,6 +4,7 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import * as Field from "$lib/components/ui/field/index.js";
   import * as RadioGroup from "$lib/components/ui/radio-group/index.js";
+  import * as Tooltip from "$lib/components/ui/tooltip/index.js";
   import { showError } from "$lib/errors";
   import type { SaveLocation } from "$lib/preferences";
 
@@ -60,9 +61,18 @@
 
   {#if folderPath}
     <div class="flex min-w-0 items-center gap-2 pl-6">
-      <span class="text-muted-foreground min-w-0 flex-1 truncate text-sm select-text" title={folderPath} dir="rtl">
-        {folderPath}
-      </span>
+      <!-- Right-to-left only moves the ellipsis to the start, so the folder's own
+           name stays in view. The path itself is isolated so it still reads left to right. -->
+      <Tooltip.Root>
+        <Tooltip.Trigger>
+          {#snippet child({ props })}
+            <span {...props} class="text-muted-foreground min-w-0 flex-1 truncate text-left text-sm select-text" dir="rtl">
+              <bdi dir="ltr">{folderPath}</bdi>
+            </span>
+          {/snippet}
+        </Tooltip.Trigger>
+        <Tooltip.Content class="max-w-sm break-all">{folderPath}</Tooltip.Content>
+      </Tooltip.Root>
       <Button variant="outline" size="sm" onclick={chooseFolder}>
         <FolderOpenIcon />
         Change
