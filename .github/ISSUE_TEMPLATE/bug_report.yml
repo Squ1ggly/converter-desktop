@@ -1,0 +1,76 @@
+name: Bug report
+description: Something doesn't work as the docs describe.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check [Troubleshooting](https://github.com/Squ1ggly/converter-desktop/blob/main/docs/troubleshooting.md) and the existing issues first. Report security problems privately instead, as described in [SECURITY.md](https://github.com/Squ1ggly/converter-desktop/blob/main/SECURITY.md).
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: operating-system-version
+    attributes:
+      label: Operating system version
+      description: For Linux, include the distribution and whether you use Wayland or X11.
+      placeholder: macOS 15.6, Windows 11 24H2, Ubuntu 24.04 on Wayland
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Converter version
+      description: It is in the installer's file name, and in your system's list of installed apps.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Include any error message exactly as the app shows it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the input file's format and the settings you chose. Attach a sample file if you can share one.
+      placeholder: |
+        1. Add a HEIC photo from an iPhone
+        2. Choose PNG
+        3. Click Convert 1 file
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Attach or paste the latest log file. Logs are kept in:
+
+        - macOS: `~/Library/Logs/com.squ1ggly.converter/`
+        - Windows: `%LOCALAPPDATA%\com.squ1ggly.converter\logs\`
+        - Linux: `~/.local/share/com.squ1ggly.converter/logs/` (or `$XDG_DATA_HOME/com.squ1ggly.converter/logs/`)
+      render: text
