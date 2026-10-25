@@ -150,12 +150,25 @@ async fn convert_one_file(job: &FileJob, context: &BatchContext) -> ConversionRe
         job.settings.output_extension(),
     )?;
 
-    let conversion_result = run_conversion(job, &output_path, context).await;
-    if conversion_result.is_err() {
+    let conversion_result = run_conversion(job, &output_path, context)
+        .await
+        .and_then(|()| ensure_output_was_written(&output_path));
+    if let Err(error) = conversion_result {
         let _ = std::fs::remove_file(&output_path);
+        return Err(error);
     }
 
-    conversion_result.map(|_| output_path)
+    Ok(output_path)
+}
+
+// The name is reserved by creating an empty file, so an encoder that wrote
+// somewhere else would otherwise look like a success.
+fn ensure_output_was_written(output_path: &Path) -> ConversionResult<()> {
+    let output_size_bytes = std::fs::metadata(output_path)?.len();
+    if output_size_bytes == 0 {
+        return Err(ConversionError::EmptyOutput);
+    }
+    Ok(())
 }
 
 fn resolve_output_directory(
@@ -214,4 +227,20 @@ async fn run_conversion(
 // The window may have closed mid-batch; there's nobody left to tell.
 fn send_event(context: &BatchContext, event: ConversionEvent) {
     let _ = context.events.send(event);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_output_is_not_a_success() {
+        let directory = tempfile::tempdir().unwrap();
+        let output_path = directory.path().join("photo.webp");
+        std::fs::write(&output_path, b"").unwrap();
+
+        let check_result = ensure_output_was_written(&output_path);
+
+        assert!(matches!(check_result, Err(ConversionError::EmptyOutput)));
+    }
 }

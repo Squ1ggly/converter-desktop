@@ -150,6 +150,20 @@ impl VideoFormat {
         }
     }
 
+    // Named explicitly so FFmpeg never picks a muxer from the file name.
+    pub fn ffmpeg_muxer(self) -> &'static str {
+        match self {
+            VideoFormat::Mp4 => "mp4",
+            VideoFormat::Mov => "mov",
+            VideoFormat::Mkv => "matroska",
+            VideoFormat::Webm => "webm",
+            VideoFormat::M4v => "ipod",
+            VideoFormat::Avi => "avi",
+            VideoFormat::Flv => "flv",
+            VideoFormat::Gif => "gif",
+        }
+    }
+
     fn label(self) -> &'static str {
         match self {
             VideoFormat::Mp4 => "MP4",

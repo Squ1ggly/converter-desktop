@@ -16,6 +16,10 @@ use crate::formats::ImageFormat;
 
 // Larger images are shrunk before tracing; cost grows with pixel count.
 const MAX_SVG_TRACE_LENGTH: u32 = 2000;
+// FFmpeg's default for these extensions is the image2 muxer, which reads "%d"
+// in a file name as a frame number. These muxers write exactly one file.
+const WEBP_MUXER: &str = "webp";
+const AVIF_MUXER: &str = "avif";
 // Quality 1–100 maps to CRF 62–8 (AVIF's range is 0–63).
 const AVIF_BEST_CRF: f32 = 8.0;
 const AVIF_WORST_CRF: f32 = 62.0;
@@ -164,6 +168,8 @@ fn webp_arguments(quality: u8) -> Vec<OsString> {
         "libwebp".into(),
         "-quality".into(),
         quality.to_string().into(),
+        "-f".into(),
+        WEBP_MUXER.into(),
     ];
     arguments
 }
@@ -196,6 +202,8 @@ fn avif_arguments(quality: u8, has_transparency: bool) -> Vec<OsString> {
         crf.to_string().into(),
         "-cpu-used".into(),
         AVIF_ENCODER_SPEED.into(),
+        "-f".into(),
+        AVIF_MUXER.into(),
     ]);
     arguments
 }

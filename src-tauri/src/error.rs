@@ -17,6 +17,9 @@ pub enum ConversionError {
     #[error("macOS could not write the HEIC file: {0}")]
     Heic(String),
 
+    #[error("Converting produced an empty file")]
+    EmptyOutput,
+
     #[error("The bundled FFmpeg is missing (looked in {0}). Reinstall the app.")]
     MissingFfmpeg(PathBuf),
 

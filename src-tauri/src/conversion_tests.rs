@@ -39,6 +39,14 @@ const ALL_VIDEO_OUTPUTS: [VideoFormat; 8] = [
     VideoFormat::Gif,
 ];
 
+// (folder, file stem) pairs. FFmpeg's image2 muxer and demuxer read a path
+// with exactly one "%d" as a numbered sequence, so each case has at most one.
+const AWKWARD_NAMES: [(&str, &str); 3] = [
+    ("plain", "Week 3%done 照片 é"),
+    ("Week 3%done 照片", "photo é"),
+    ("100% sure", "50% off"),
+];
+
 const SAMPLE_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48">
   <rect width="64" height="48" fill="#4f46e5"/><circle cx="32" cy="24" r="16" fill="white"/>
 </svg>"##;
@@ -235,6 +243,90 @@ async fn every_image_input_converts_to_every_image_output() {
     }
 }
 
+fn file_names_in(directory: &Path) -> Vec<String> {
+    let mut file_names: Vec<String> = std::fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    file_names.sort();
+    file_names
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn awkward_file_and_folder_names_convert_to_every_image_output() {
+    for (folder_name, file_stem) in AWKWARD_NAMES {
+        convert_awkward_image_to_every_output(folder_name, file_stem).await;
+    }
+}
+
+async fn convert_awkward_image_to_every_output(folder_name: &str, file_stem: &str) {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let input_directory = tempfile::tempdir().unwrap();
+    let output_root = tempfile::tempdir().unwrap();
+    let output_directory = output_root.path().join(folder_name);
+    std::fs::create_dir(&output_directory).unwrap();
+    let input_path = input_directory.path().join(format!("{file_stem}.png"));
+    write_transparent_png(&input_path);
+
+    for format in image_outputs_for_this_platform() {
+        let output_path = convert_image_to(
+            &input_path,
+            format,
+            ResizeOption::Original,
+            &output_directory,
+        )
+        .await
+        .unwrap_or_else(|error| panic!("{file_stem} → {format:?} failed: {error}"));
+        assert_valid_output(&ffmpeg, &output_path).await;
+    }
+
+    // Nothing else may appear, such as "Week 31one" from a muxer that read the
+    // name as a pattern. macOS `sips` stores the HEIC name decomposed, so
+    // names are looked up rather than compared.
+    let written_file_count = file_names_in(&output_directory)
+        .iter()
+        .filter(|name| !name.starts_with(".tmp"))
+        .count();
+    assert_eq!(written_file_count, image_outputs_for_this_platform().len());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_misnamed_file_with_a_percent_sign_is_still_read() {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let directory = tempfile::tempdir().unwrap();
+    let png_path = directory.path().join("source.png");
+    write_transparent_png(&png_path);
+
+    // AVIF content the image crate can't read, under a name FFmpeg's image2
+    // demuxer would claim as a numbered sequence.
+    let misnamed_path = directory.path().join("Week 3%done.png");
+    run_ffmpeg(
+        &ffmpeg,
+        &[
+            "-i",
+            &png_path.to_string_lossy(),
+            "-c:v",
+            "libaom-av1",
+            "-still-picture",
+            "1",
+            "-f",
+            "avif",
+            &misnamed_path.to_string_lossy(),
+        ],
+    )
+    .await;
+
+    let output_path = convert_image_to(
+        &misnamed_path,
+        ImageFormat::Png,
+        ResizeOption::Original,
+        directory.path(),
+    )
+    .await
+    .expect("misnamed file converts");
+    assert_eq!(image::image_dimensions(&output_path).unwrap(), (121, 81));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn resizing_applies_to_raster_and_vector_inputs() {
     let input_directory = tempfile::tempdir().unwrap();
@@ -307,6 +399,66 @@ async fn every_video_output_is_playable() {
         assert_valid_output(&ffmpeg, &output_path).await;
         assert!(last_progress > 0.0, "{format:?} reported no progress");
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn awkward_file_and_folder_names_convert_to_every_video_output() {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let input_directory = tempfile::tempdir().unwrap();
+    let input_path = input_directory.path().join("clip.mov");
+    run_ffmpeg(
+        &ffmpeg,
+        &[
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=0.5:size=64x48:rate=10",
+            &input_path.to_string_lossy(),
+        ],
+    )
+    .await;
+
+    for (folder_name, file_stem) in AWKWARD_NAMES {
+        let output_root = tempfile::tempdir().unwrap();
+        let output_directory = output_root.path().join(folder_name);
+        std::fs::create_dir(&output_directory).unwrap();
+
+        for format in ALL_VIDEO_OUTPUTS {
+            let output_path = output_directory.join(format!("{file_stem}.{}", format.extension()));
+            convert_quick_video(&ffmpeg, &input_path, &output_path, format).await;
+            assert_valid_output(&ffmpeg, &output_path).await;
+        }
+        assert_eq!(
+            file_names_in(&output_directory).len(),
+            ALL_VIDEO_OUTPUTS.len()
+        );
+    }
+}
+
+async fn convert_quick_video(
+    ffmpeg: &Ffmpeg,
+    input_path: &Path,
+    output_path: &Path,
+    format: VideoFormat,
+) {
+    let conversion = VideoConversion {
+        input_path,
+        output_path,
+        format,
+        options: VideoOptions {
+            quality: VideoQuality::Small,
+            max_height: None,
+            frame_rate: None,
+        },
+        ffmpeg,
+        cancellation: &CancellationToken::new(),
+    };
+    let conversion_result = convert_video(conversion, |_| {}).await;
+    assert!(
+        conversion_result.is_ok(),
+        "{} failed: {conversion_result:?}",
+        output_path.display()
+    );
 }
 
 // Reads "WxH" and fps from FFmpeg's description of the first video stream.

@@ -105,20 +105,41 @@ async fn decode_with_ffmpeg(
     scratch_directory: &Path,
     cancellation: &CancellationToken,
 ) -> ConversionResult<DynamicImage> {
+    let readable_input_path = path_ffmpeg_can_read(input_path, scratch_directory)?;
     let decoded_path = scratch_directory.join("decoded.png");
     let arguments: Vec<OsString> = vec![
         "-i".into(),
-        input_path.into(),
+        readable_input_path.into(),
         "-frames:v".into(),
         "1".into(),
         "-pix_fmt".into(),
         "rgba".into(),
+        "-f".into(),
+        "image2".into(),
+        "-update".into(),
+        "1".into(),
         decoded_path.clone().into(),
     ];
     ffmpeg.run(arguments, cancellation, |_| {}).await?;
 
     let decoded_image = run_blocking(move || decode_with_image_crate(&decoded_path)).await?;
     Ok(decoded_image)
+}
+
+// FFmpeg reads "%d" in a path with an image extension as an image sequence
+// and picks its decoder from the extension, so a misnamed "Week 3%done.jpg"
+// fails. A link without an extension makes FFmpeg go by the content.
+fn path_ffmpeg_can_read(input_path: &Path, scratch_directory: &Path) -> ConversionResult<PathBuf> {
+    let has_percent_sign = input_path.as_os_str().to_string_lossy().contains('%');
+    if !has_percent_sign {
+        return Ok(input_path.to_path_buf());
+    }
+
+    let linked_path = scratch_directory.join("source");
+    if std::fs::hard_link(input_path, &linked_path).is_err() {
+        std::fs::copy(input_path, &linked_path)?;
+    }
+    Ok(linked_path)
 }
 
 fn render_svg(input_path: &Path, resize: ResizeOption) -> ConversionResult<DynamicImage> {

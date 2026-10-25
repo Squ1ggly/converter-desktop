@@ -51,7 +51,11 @@ fn build_arguments(
         arguments.extend(codec_arguments(format, options.quality));
     }
 
-    arguments.push(output_path.into());
+    arguments.extend([
+        "-f".into(),
+        format.ffmpeg_muxer().into(),
+        output_path.into(),
+    ]);
     arguments
 }
 
@@ -208,6 +212,16 @@ mod tests {
         assert!(arguments.contains(&"libx264".to_string()));
         assert!(arguments.contains(&"+faststart".to_string()));
         assert_eq!(arguments.last().unwrap(), "out.file");
+    }
+
+    #[test]
+    fn every_format_names_its_muxer() {
+        for format in [VideoFormat::M4v, VideoFormat::Gif] {
+            let arguments = arguments_as_text(format, BALANCED);
+            let muxer_position = arguments.len() - 2;
+            assert_eq!(arguments[muxer_position - 1], "-f");
+            assert_eq!(arguments[muxer_position], format.ffmpeg_muxer());
+        }
     }
 
     #[test]
