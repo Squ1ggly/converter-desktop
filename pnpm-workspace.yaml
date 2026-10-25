@@ -2,3 +2,9 @@ allowBuilds:
   edgedriver: false
   esbuild: true
   geckodriver: false
+
+# Patched releases of vulnerable dev-only dependencies whose parents pin older versions.
+# Remove each entry once its parent allows the patched version.
+overrides:
+  serialize-javascript: ^7.1.4
+  postcss-selector-parser: ^7.1.7
