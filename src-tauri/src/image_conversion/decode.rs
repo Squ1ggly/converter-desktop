@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use hayro::hayro_interpret::InterpreterSettings;
-use hayro::hayro_syntax::Pdf;
+use hayro::hayro_syntax::{LoadPdfError, Pdf};
 use hayro::vello_cpu::color::palette::css::WHITE;
 use hayro::vello_cpu::peniko::ImageAlphaType;
 use hayro::{PixmapSettings, RenderCache, RenderSettings};
@@ -223,6 +223,14 @@ fn image_from_rgba_pixels(
     Ok(rendered_image)
 }
 
+fn describe_pdf_error(error: LoadPdfError) -> ConversionError {
+    let reason = match error {
+        LoadPdfError::Decryption(_) => "the PDF is password-protected",
+        LoadPdfError::Invalid => "the PDF is damaged",
+    };
+    ConversionError::UnreadableImage(reason.to_string())
+}
+
 // Loading system fonts is slow, so it happens once.
 fn shared_font_database() -> Arc<usvg::fontdb::Database> {
     static FONT_DATABASE: OnceLock<Arc<usvg::fontdb::Database>> = OnceLock::new();
@@ -241,8 +249,7 @@ fn render_pdf_first_page(
     resize: ResizeOption,
 ) -> ConversionResult<DynamicImage> {
     let pdf_data = std::fs::read(input_path)?;
-    let pdf = Pdf::new(pdf_data)
-        .map_err(|error| ConversionError::UnreadableImage(format!("{error:?}")))?;
+    let pdf = Pdf::new(pdf_data).map_err(describe_pdf_error)?;
     let first_page = pdf
         .pages()
         .first()
