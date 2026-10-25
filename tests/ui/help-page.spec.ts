@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect, launchConverter, test, type MockBackend } from "./support/converter";
 
@@ -82,15 +84,24 @@ test("a link outside the guide opens on GitHub in the browser", async ({ page })
   expect(new URL(page.url()).pathname).toBe("/");
 });
 
-test("a web link in the guide opens in the browser", async ({ page }) => {
+test("the guide's link to Installing opens on GitHub, since Installing isn't in the app", async ({ page }) => {
   const backend = await openHelp(page);
-  await helpPages(page).filter({ hasText: "Installing" }).click();
+  await helpPages(page).filter({ hasText: "Troubleshooting" }).click();
 
-  await guideArticle(page).getByRole("link", { name: "releases page" }).click();
+  await guideArticle(page).getByRole("link", { name: "Installing" }).click();
 
   await expect
     .poll(async () => (await backend.readLog()).openedUrls)
-    .toEqual(["https://github.com/Squ1ggly/converter-desktop/releases"]);
+    .toEqual([`${REPOSITORY_URL}/docs/installing.md`]);
+});
+
+test("the pages follow the guide's index, without Installing", async ({ page }) => {
+  const indexMarkdown = await readFile(path.join(import.meta.dirname, "../../docs/README.md"), "utf8");
+  const usingTheApp = indexMarkdown.slice(indexMarkdown.indexOf("## Using the app"), indexMarkdown.indexOf("## Development"));
+  const indexTitles = [...usingTheApp.matchAll(/\| \[([^\]]+)\]\(/g)].map((match) => match[1] ?? "");
+  await openHelp(page);
+
+  await expect(helpPages(page)).toHaveText(indexTitles.filter((title) => title !== "Installing"));
 });
 
 test("a link to another guide page also opens with the keyboard", async ({ page }) => {

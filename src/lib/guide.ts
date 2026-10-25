@@ -5,17 +5,18 @@ import { gfmHeadingId } from "marked-gfm-heading-id";
 // always matches the docs on GitHub.
 const markdownByPath = import.meta.glob<string>("/docs/*.md", { query: "?raw", import: "default", eager: true });
 
-const PAGE_ORDER = [
-  "adding-files",
-  "images",
-  "videos",
-  "converting",
-  "saving",
-  "shortcuts",
-  "settings-and-data",
-  "troubleshooting",
-  "installing",
-];
+// Installing is only useful before the app is installed, so it stays on GitHub.
+const PAGES_LEFT_OUT = new Set(["installing"]);
+
+// Pages appear in the order of the "Using the app" table in docs/README.md.
+function readPageOrder(indexMarkdown: string): string[] {
+  const usingTheAppSection = indexMarkdown.split(/^## /m).find((section) => section.startsWith("Using the app")) ?? "";
+  const linkedSlugs = [...usingTheAppSection.matchAll(/\]\(([\w-]+)\.md\)/g)].map((match) => match[1] ?? "");
+  const pageOrder = linkedSlugs.filter((slug) => slug !== "" && !PAGES_LEFT_OUT.has(slug));
+  return pageOrder;
+}
+
+const PAGE_ORDER = readPageOrder(markdownByPath["/docs/README.md"] ?? "");
 
 // Links that leave the user guide (development docs, CONTRIBUTING) open here.
 const REPOSITORY_DOCS_URL = "https://github.com/Squ1ggly/converter-desktop/blob/main/docs/";
