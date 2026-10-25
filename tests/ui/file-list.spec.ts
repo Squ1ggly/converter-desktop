@@ -75,3 +75,20 @@ test("Add files in the toolbar opens the file dialog", async ({ page }) => {
   await expect(fileRow(page, "city.jpg")).toBeVisible();
   await expect(page.getByRole("heading", { name: "2 files" })).toBeVisible();
 });
+
+test("finished, failed and cancelled files can be removed one at a time", async ({ page }) => {
+  const backend = await launchConverter(page, { conversionMode: "manual" });
+  await backend.dropFiles([BEACH_PHOTO, CITY_PHOTO, HOLIDAY_VIDEO]);
+  await page.getByRole("button", { name: "Convert 3 files" }).click();
+  await backend.completeFile("beach.png", "/Users/sam/Pictures/beach.jpg");
+  await backend.failFile("city.jpg", "Permission denied");
+  await expect(page.getByRole("region", { name: "Files" }).getByRole("button", { name: "Remove" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(fileRow(page, "holiday.mov")).toContainText("Cancelled");
+
+  await fileRow(page, "holiday.mov").getByRole("button", { name: "Remove" }).click();
+  await fileRow(page, "city.jpg").getByRole("button", { name: "Remove" }).click();
+  await fileRow(page, "beach.png").getByRole("button", { name: "Remove" }).click();
+
+  await expect(page.getByText("Drop images or videos")).toBeVisible();
+});

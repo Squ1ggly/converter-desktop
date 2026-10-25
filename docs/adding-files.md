@@ -45,7 +45,8 @@ converting waits until then.
 
 ## Removing files
 
-Before converting, click the × button (**Remove**) next to a file to take it out of the list.
+Click the × button (**Remove**) next to a file to take it out of the list. It's there before and
+after a conversion, for converted, failed and cancelled files too, but not while files convert.
 
 Adding files after a conversion has finished starts a new list: files that converted
 successfully are removed, and files that failed or were cancelled stay so you can try them again.

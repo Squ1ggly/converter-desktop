@@ -60,11 +60,7 @@
   </Item.Content>
 
   <Item.Actions class="min-w-28 justify-end">
-    {#if item.status === "ready"}
-      <IconAction label="Remove" disabled={isLocked} onclick={() => onRemove(item.id)}>
-        <XIcon />
-      </IconAction>
-    {:else if item.status === "waiting"}
+    {#if item.status === "waiting"}
       <span class="text-muted-foreground text-xs">Queued</span>
     {:else if item.status === "converting" && item.progressPercent === null}
       <Spinner aria-label="Converting" />
@@ -84,6 +80,11 @@
       <Badge variant="destructive">Failed</Badge>
     {:else if item.status === "cancelled"}
       <Badge variant="secondary">Cancelled</Badge>
+    {/if}
+    {#if !isLocked}
+      <IconAction label="Remove" onclick={() => onRemove(item.id)}>
+        <XIcon />
+      </IconAction>
     {/if}
   </Item.Actions>
 </Item.Root>
