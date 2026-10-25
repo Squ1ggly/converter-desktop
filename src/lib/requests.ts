@@ -1,5 +1,5 @@
 import type { ConversionRequest, ConversionSettings, MediaKind } from "$lib/backend";
-import type { Preferences } from "$lib/preferences.svelte";
+import type { Preferences } from "$lib/preferences";
 import type { QueueItem } from "$lib/queue.svelte";
 
 function buildSettings(kind: MediaKind, preferences: Preferences): ConversionSettings {

@@ -27,7 +27,7 @@
   import { ConversionRun } from "$lib/conversion-run.svelte";
   import { errorMessageOf } from "$lib/errors";
   import { pluralise, revealInFolderLabel } from "$lib/formatting";
-  import { PreferenceStore } from "$lib/preferences.svelte";
+  import { PreferenceStore } from "$lib/preference-store.svelte";
   import { FileQueue } from "$lib/queue.svelte";
   import { shortcutFor, type Shortcut } from "$lib/shortcuts";
   import type { AppView } from "$lib/views";
@@ -69,9 +69,18 @@
     }
   }
 
+  // A damaged settings file shouldn't stop the app; the defaults are used instead.
+  async function loadPreferences(): Promise<void> {
+    try {
+      await preferenceStore.load();
+    } catch {
+      toast.error("Couldn't load your settings", { description: "Using the defaults for now." });
+    }
+  }
+
   async function initialise(): Promise<void> {
     try {
-      const [loadedCatalog] = await Promise.all([getCatalog(), preferenceStore.load()]);
+      const [loadedCatalog] = await Promise.all([getCatalog(), loadPreferences()]);
       fallBackToAvailableFormats(loadedCatalog);
       catalog = loadedCatalog;
       hasLoadedPreferences = true;

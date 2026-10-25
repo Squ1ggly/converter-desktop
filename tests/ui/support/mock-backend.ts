@@ -6,7 +6,6 @@ import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
 import type { ConversionEvent, ConversionRequest, InspectedFile, MediaKind } from "$lib/backend";
-import type { Preferences } from "$lib/preferences.svelte";
 import { buildCatalog, classifyFileName } from "./catalog";
 import type {
   BackendLog,
@@ -14,6 +13,7 @@ import type {
   FileConversionEvent,
   MockBackendControls,
   MockScenario,
+  SavedSettings,
 } from "./scenario";
 
 // How Rust delivers channel messages: numbered, then an end marker.
@@ -249,11 +249,11 @@ function openDialog(options: OpenDialogOptions): DialogResult {
   return dialogResult;
 }
 
-function storeValue(value: Partial<Preferences>): void {
+function storeValue(value: SavedSettings): void {
   backendLog.storedPreferences = value;
 }
 
-function readStoredPreferences(): [Partial<Preferences> | null, boolean] {
+function readStoredPreferences(): [SavedSettings | null, boolean] {
   const storedPreferences = backendLog.storedPreferences;
   return [storedPreferences, storedPreferences !== null];
 }
@@ -290,10 +290,16 @@ const COMMAND_HANDLERS: Record<string, CommandHandler> = {
   "plugin:dialog|open": (payload) => openDialog(argumentsAs<{ options: OpenDialogOptions }>(payload).options),
   "plugin:store|load": () => STORE_RESOURCE_ID,
   "plugin:store|get": () => readStoredPreferences(),
-  "plugin:store|set": (payload) => storeValue(argumentsAs<{ value: Partial<Preferences> }>(payload).value),
+  "plugin:store|set": (payload) => storeValue(argumentsAs<{ value: SavedSettings }>(payload).value),
 };
 
 function handleCommand(command: string, payload: InvokeArgs | undefined): unknown {
+  // Like Rust, a failing command rejects with a plain string.
+  const failureMessage = scenario.failingCommands[command];
+  if (failureMessage !== undefined) {
+    return Promise.reject(failureMessage);
+  }
+
   const commandHandler = COMMAND_HANDLERS[command];
   if (!commandHandler) {
     throw new Error(`The mock backend has no handler for ${command}`);

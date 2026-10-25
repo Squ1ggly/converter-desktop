@@ -1,22 +1,26 @@
 // Shared between the Playwright tests (Node) and the mock backend (browser).
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
 import type { ConversionEvent, ConversionRequest, MediaKind } from "$lib/backend";
-import type { Preferences } from "$lib/preferences.svelte";
 
 export type Platform = "macos" | "windows" | "linux";
 
 export type ConversionMode = "automatic" | "manual";
 
+// What settings.json holds. It may be from an older version, edited by hand or damaged.
+export type SavedSettings = Record<string, unknown>;
+
 export interface MockScenario {
   platform: Platform;
   // Files inside each folder, returned when the folder itself is added.
   folders: Record<string, string[]>;
-  savedPreferences: Partial<Preferences> | null;
+  savedPreferences: SavedSettings | null;
   // "automatic" converts every file straight away. "manual" waits for the
   // test to send each file's events.
   conversionMode: ConversionMode;
   // File names that fail in automatic mode, with the error to report.
   failingFiles: Record<string, string>;
+  // Commands that fail, with the error each returns, e.g. { open_output: "Not found" }.
+  failingCommands: Record<string, string>;
 }
 
 type WithoutFileId<Event> = Event extends ConversionEvent ? Omit<Event, "fileId"> : never;
@@ -36,7 +40,7 @@ export interface BackendLog {
   openedUrls: string[];
   // One entry per window destroy, with how many batches were still running then.
   windowDestroys: { runningBatchCount: number }[];
-  storedPreferences: Partial<Preferences> | null;
+  storedPreferences: SavedSettings | null;
 }
 
 // The browser half of the mock backend, driven by the tests through page.evaluate.

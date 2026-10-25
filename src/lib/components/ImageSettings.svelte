@@ -3,7 +3,16 @@
   import * as InputGroup from "$lib/components/ui/input-group/index.js";
   import { Slider } from "$lib/components/ui/slider/index.js";
   import type { FormatOption, ResizeOption } from "$lib/backend";
-  import type { Preferences } from "$lib/preferences.svelte";
+  import {
+    DEFAULT_SCALE_PERCENT,
+    MAX_IMAGE_QUALITY,
+    MAX_SCALE_PERCENT,
+    MIN_IMAGE_QUALITY,
+    MIN_SCALE_PERCENT,
+    RESIZE_MODES,
+    defaultResizeFor,
+  } from "$lib/conversion-options";
+  import type { Preferences } from "$lib/preferences";
   import FormatPicker from "./FormatPicker.svelte";
   import OptionToggle from "./OptionToggle.svelte";
 
@@ -14,30 +23,10 @@
 
   let { formatOptions, preferences = $bindable() }: Props = $props();
 
-  type ResizeMode = ResizeOption["mode"];
   type FitResize = Extract<ResizeOption, { mode: "fit" }>;
-
-  const RESIZE_MODES: { value: ResizeMode; label: string }[] = [
-    { value: "original", label: "Original" },
-    { value: "percent", label: "Scale" },
-    { value: "fit", label: "Fit" },
-  ];
-  const DEFAULT_SCALE_PERCENT = 50;
-  const MIN_SCALE_PERCENT = 1;
-  const MAX_SCALE_PERCENT = 1000;
 
   const selectedFormat = $derived(formatOptions.find((option) => option.id === preferences.imageFormat));
   const usesQuality = $derived(selectedFormat?.usesQuality ?? false);
-
-  function defaultResizeFor(mode: ResizeMode): ResizeOption {
-    if (mode === "percent") {
-      return { mode, percent: DEFAULT_SCALE_PERCENT };
-    }
-    if (mode === "fit") {
-      return { mode, maxWidth: null, maxHeight: null };
-    }
-    return { mode: "original" };
-  }
 
   // Blank or invalid number fields mean "no limit".
   function parsePositiveWholeNumber(text: string): number | null {
@@ -75,7 +64,7 @@
         <Field.Label for="image-quality">Quality</Field.Label>
         <span class="text-muted-foreground text-sm tabular-nums">{preferences.imageQuality}</span>
       </div>
-      <Slider id="image-quality" type="single" min={1} max={100} step={1} bind:value={preferences.imageQuality} aria-label="Quality" />
+      <Slider id="image-quality" type="single" min={MIN_IMAGE_QUALITY} max={MAX_IMAGE_QUALITY} step={1} bind:value={preferences.imageQuality} aria-label="Quality" />
       <div class="text-muted-foreground flex justify-between text-xs" aria-hidden="true">
         <span>Smaller</span>
         <span>Sharper</span>

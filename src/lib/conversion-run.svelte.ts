@@ -1,6 +1,6 @@
 import { cancelConversion, convertFiles, type ConversionRequest } from "$lib/backend";
 import { errorMessageOf } from "$lib/errors";
-import type { Preferences } from "$lib/preferences.svelte";
+import type { Preferences } from "$lib/preferences";
 import type { FileQueue } from "$lib/queue.svelte";
 import { buildConversionRequests } from "$lib/requests";
 

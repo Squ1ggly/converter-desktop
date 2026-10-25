@@ -2,7 +2,7 @@
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import { Separator } from "$lib/components/ui/separator/index.js";
   import type { ConversionCatalog } from "$lib/backend";
-  import type { Preferences } from "$lib/preferences.svelte";
+  import type { Preferences } from "$lib/preferences";
   import ConvertFooter from "./ConvertFooter.svelte";
   import ImageSettings from "./ImageSettings.svelte";
   import SaveLocation from "./SaveLocation.svelte";

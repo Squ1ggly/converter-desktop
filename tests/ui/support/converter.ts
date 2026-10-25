@@ -12,6 +12,7 @@ const DEFAULT_SCENARIO: MockScenario = {
   savedPreferences: null,
   conversionMode: "automatic",
   failingFiles: {},
+  failingCommands: {},
 };
 
 export const test = base.extend<{ failOnPageErrors: void }>({

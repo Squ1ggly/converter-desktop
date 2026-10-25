@@ -27,7 +27,11 @@ Your choices are saved as you change them and restored on the next launch:
 | Save to | Same folder as original, or the folder you chose |
 
 The file list is not remembered. If the saved image format is HEIC and the app is running on
-Windows or Linux, it falls back to JPG.
+Windows or Linux, it falls back to JPG. Any saved setting that isn't valid, for example after
+editing `settings.json` by hand, goes back to its default.
+
+If `settings.json` can't be read at all, the app starts with the defaults and shows "Couldn't
+load your settings". Changes aren't saved until the file is fixed or deleted.
 
 The theme is remembered separately and follows your system by default.
 

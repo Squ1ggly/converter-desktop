@@ -4,7 +4,7 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import * as Field from "$lib/components/ui/field/index.js";
   import * as RadioGroup from "$lib/components/ui/radio-group/index.js";
-  import type { SaveLocation } from "$lib/preferences.svelte";
+  import type { SaveLocation } from "$lib/preferences";
 
   interface Props {
     saveLocation: SaveLocation;
