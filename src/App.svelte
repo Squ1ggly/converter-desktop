@@ -4,8 +4,6 @@
   import { toast } from "svelte-sonner";
   import type { Event as TauriEvent } from "@tauri-apps/api/event";
   import { getCurrentWebview, type DragDropEvent } from "@tauri-apps/api/webview";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { open, type OpenDialogOptions } from "@tauri-apps/plugin-dialog";
   import { Toaster } from "$lib/components/ui/sonner/index.js";
   import * as Tooltip from "$lib/components/ui/tooltip/index.js";
   import BusyState from "$lib/components/BusyState.svelte";
@@ -17,37 +15,30 @@
   import SettingsPanel from "$lib/components/SettingsPanel.svelte";
   import SettingsView from "$lib/components/SettingsView.svelte";
   import Toolbar from "$lib/components/Toolbar.svelte";
-  import {
-    getCatalog,
-    openOutput,
-    revealOutput,
-    type ConversionCatalog,
-    type FormatOption,
-  } from "$lib/backend";
+  import { getCatalog, type ConversionCatalog, type FormatOption } from "$lib/backend";
   import { ConversionRun } from "$lib/conversion-run.svelte";
+  import { openConvertedFile, revealConvertedFile } from "$lib/converted-files";
   import { errorMessageOf, showError } from "$lib/errors";
-  import { FileAdder, type AddOutcome } from "$lib/file-adder.svelte";
-  import { pluralise, revealInFolderLabel } from "$lib/formatting";
+  import { FileAdder, WAIT_FOR_CONVERSION_MESSAGE, reportAddOutcome } from "$lib/file-adder.svelte";
+  import { pickFiles, pickFolders } from "$lib/file-pickers";
+  import { revealInFolderLabel } from "$lib/formatting";
   import { PreferenceStore } from "$lib/preference-store.svelte";
+  import { QuitGuard } from "$lib/quit-guard.svelte";
   import { FileQueue } from "$lib/queue.svelte";
   import { UNKNOWN_PLATFORM, shortcutFor, type Shortcut } from "$lib/shortcuts";
   import type { AppView } from "$lib/views";
-
-  const MAX_NAMES_IN_TOAST = 3;
-  const WAIT_FOR_CONVERSION_MESSAGE = "Wait for the current conversion to finish.";
 
   const queue = new FileQueue();
   const preferenceStore = new PreferenceStore();
   const conversionRun = new ConversionRun(queue);
   const fileAdder = new FileAdder(queue);
+  const quitGuard = new QuitGuard(queue, conversionRun);
 
   let catalog = $state<ConversionCatalog | null>(null);
   let startupError = $state<string | null>(null);
   let hasLoadedPreferences = $state(false);
   let isDraggingFiles = $state(false);
   let view = $state<AppView>("converter");
-  let isQuitDialogOpen = $state(false);
-  let isQuitting = $state(false);
 
   const platform = $derived(catalog?.platform ?? UNKNOWN_PLATFORM);
   const revealLabel = $derived(revealInFolderLabel(platform));
@@ -57,20 +48,6 @@
   function labelFor(options: FormatOption[] | undefined, formatId: string): string {
     const label = options?.find((option) => option.id === formatId)?.label ?? formatId.toUpperCase();
     return label;
-  }
-
-  // A saved format may not exist on this machine (HEIC output is macOS only).
-  function fallBackToAvailableFormats(loadedCatalog: ConversionCatalog): void {
-    const preferences = preferenceStore.values;
-    const isImageFormatAvailable = loadedCatalog.imageOutputs.some((option) => option.id === preferences.imageFormat);
-    const isVideoFormatAvailable = loadedCatalog.videoOutputs.some((option) => option.id === preferences.videoFormat);
-
-    if (!isImageFormatAvailable && loadedCatalog.imageOutputs[0]) {
-      preferences.imageFormat = loadedCatalog.imageOutputs[0].id;
-    }
-    if (!isVideoFormatAvailable && loadedCatalog.videoOutputs[0]) {
-      preferences.videoFormat = loadedCatalog.videoOutputs[0].id;
-    }
   }
 
   // A damaged settings file shouldn't stop the app; the defaults are used instead.
@@ -85,21 +62,12 @@
   async function initialise(): Promise<void> {
     try {
       const [loadedCatalog] = await Promise.all([getCatalog(), loadPreferences()]);
-      fallBackToAvailableFormats(loadedCatalog);
+      preferenceStore.useAvailableFormats(loadedCatalog);
       catalog = loadedCatalog;
       hasLoadedPreferences = true;
     } catch (error) {
       startupError = errorMessageOf(error);
     }
-  }
-
-  function describeSkippedFiles(skippedNames: string[]): string {
-    const listedNames = skippedNames.slice(0, MAX_NAMES_IN_TOAST).join(", ");
-    const remainingCount = skippedNames.length - MAX_NAMES_IN_TOAST;
-    const remainder = remainingCount > 0 ? ` and ${remainingCount} more` : "";
-
-    const description = `${listedNames}${remainder}`;
-    return description;
   }
 
   async function addPaths(paths: string[]): Promise<void> {
@@ -121,57 +89,18 @@
     }
   }
 
-  function reportAddOutcome(outcome: AddOutcome): void {
-    if (outcome.kind === "busy") {
-      toast.info(WAIT_FOR_CONVERSION_MESSAGE);
-      return;
-    }
-    if (outcome.kind !== "added" || outcome.unsupportedNames.length === 0) {
-      return;
-    }
-
-    const skippedNames = outcome.unsupportedNames;
-    toast.warning(`Skipped ${pluralise(skippedNames.length, "unsupported file")}`, {
-      description: describeSkippedFiles(skippedNames),
-    });
-  }
-
   async function chooseFiles(): Promise<void> {
     if (!catalog) {
       return;
     }
 
-    const supportedExtensions = [...catalog.imageInputExtensions, ...catalog.videoInputExtensions];
-    const chosenPaths = await pickPaths("Couldn't open the file picker", {
-      multiple: true,
-      title: "Choose images or videos",
-      filters: [
-        { name: "Images and videos", extensions: supportedExtensions },
-        { name: "Images", extensions: catalog.imageInputExtensions },
-        { name: "Videos", extensions: catalog.videoInputExtensions },
-      ],
-    });
+    const chosenPaths = await pickFiles(catalog);
     await addPaths(chosenPaths);
   }
 
   async function chooseFolder(): Promise<void> {
-    const chosenPaths = await pickPaths("Couldn't open the folder picker", {
-      directory: true,
-      multiple: true,
-      title: "Choose folders",
-    });
+    const chosenPaths = await pickFolders();
     await addPaths(chosenPaths);
-  }
-
-  // Returns no paths if the picker is cancelled or can't open.
-  async function pickPaths(errorTitle: string, options: OpenDialogOptions & { multiple: true }): Promise<string[]> {
-    try {
-      const chosenPaths = await open(options);
-      return chosenPaths ?? [];
-    } catch (error) {
-      showError(errorTitle, error);
-      return [];
-    }
   }
 
   async function cancelConversion(): Promise<void> {
@@ -187,22 +116,6 @@
       return;
     }
     await conversionRun.start($state.snapshot(preferenceStore.values));
-  }
-
-  async function openConvertedFile(path: string): Promise<void> {
-    try {
-      await openOutput(path);
-    } catch (error) {
-      showError("Couldn't open the file", error);
-    }
-  }
-
-  async function revealConvertedFile(path: string): Promise<void> {
-    try {
-      await revealOutput(path);
-    } catch (error) {
-      showError("Couldn't show the file", error);
-    }
   }
 
   function handleDragDrop(event: TauriEvent<DragDropEvent>): void {
@@ -250,7 +163,7 @@
 
   function handleKeydown(event: KeyboardEvent): void {
     // A held key repeats; each shortcut acts once. The quit dialog has its own keys.
-    if (event.repeat || isQuitDialogOpen) {
+    if (event.repeat || quitGuard.isDialogOpen) {
       return;
     }
 
@@ -262,45 +175,10 @@
     SHORTCUT_ACTIONS[shortcut]();
   }
 
-  // Closing mid-conversion asks first, so nothing is left half-written.
-  function guardWindowClose(event: { preventDefault: () => void }): void {
-    if (!queue.isConverting) {
-      return;
-    }
-    event.preventDefault();
-    isQuitDialogOpen = true;
-  }
-
-  async function quitAfterCancelling(): Promise<void> {
-    if (isQuitting) {
-      return;
-    }
-
-    isQuitting = true;
-    try {
-      await conversionRun.cancel();
-      await conversionRun.waitUntilFinished();
-    } catch (error) {
-      // The window still closes. The error stays visible if closing fails too.
-      showError("Couldn't cancel the conversion", error);
-    } finally {
-      await destroyWindow();
-    }
-  }
-
-  async function destroyWindow(): Promise<void> {
-    try {
-      await getCurrentWindow().destroy();
-    } catch (error) {
-      isQuitting = false;
-      showError("Couldn't quit", error);
-    }
-  }
-
   onMount(() => {
     void initialise();
     const stopDragDropPromise = getCurrentWebview().onDragDropEvent(handleDragDrop);
-    const stopCloseGuardPromise = getCurrentWindow().onCloseRequested(guardWindowClose);
+    const stopCloseGuardPromise = quitGuard.listenForClose();
 
     return () => {
       void stopDragDropPromise.then((stopListening) => stopListening());
@@ -390,4 +268,4 @@
   <DropOverlay isConverting={queue.isConverting} />
 {/if}
 
-<QuitDialog bind:open={isQuitDialogOpen} {isQuitting} onQuit={quitAfterCancelling} />
+<QuitDialog bind:open={quitGuard.isDialogOpen} isQuitting={quitGuard.isQuitting} onQuit={() => quitGuard.quit()} />

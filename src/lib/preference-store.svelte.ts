@@ -1,4 +1,5 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
+import type { ConversionCatalog } from "$lib/backend";
 import { DEFAULT_PREFERENCES, parseSavedPreferences, type Preferences } from "$lib/preferences";
 
 // The store plugin keeps this file in the current user's app data folder,
@@ -19,6 +20,19 @@ export class PreferenceStore {
     const savedPreferences: unknown = await store.get(STORE_KEY);
     this.values = parseSavedPreferences(savedPreferences);
     this.#store = store;
+  }
+
+  // A saved format may not exist on this machine (HEIC output is macOS only).
+  useAvailableFormats(catalog: ConversionCatalog): void {
+    const isImageFormatAvailable = catalog.imageOutputs.some((option) => option.id === this.values.imageFormat);
+    const isVideoFormatAvailable = catalog.videoOutputs.some((option) => option.id === this.values.videoFormat);
+
+    if (!isImageFormatAvailable && catalog.imageOutputs[0]) {
+      this.values.imageFormat = catalog.imageOutputs[0].id;
+    }
+    if (!isVideoFormatAvailable && catalog.videoOutputs[0]) {
+      this.values.videoFormat = catalog.videoOutputs[0].id;
+    }
   }
 
   // Call from an $effect: reading every value here makes the effect re-run

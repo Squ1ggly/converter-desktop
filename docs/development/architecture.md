@@ -49,9 +49,13 @@ src/
   lib/backend.ts             Typed wrappers for the Rust commands
   lib/queue.svelte.ts        The file list and each file's conversion state
   lib/conversion-run.svelte.ts  Starts, cancels and waits for a conversion
+  lib/file-adder.svelte.ts   Adds dropped or picked paths, and reports skipped files
+  lib/file-pickers.ts        The native file and folder pickers
+  lib/quit-guard.svelte.ts   Asks before closing mid-conversion, then cancels and quits
   lib/shortcuts.ts           Keyboard shortcuts and their key labels per OS
   lib/requests.ts            Builds one conversion request per kind from the list and settings
-  lib/preferences.svelte.ts  Remembered settings, stored with the Tauri store plugin
+  lib/preferences.ts         Settings, their defaults and the check on saved values
+  lib/preference-store.svelte.ts  Remembered settings, stored with the Tauri store plugin
   lib/formatting.ts          Sizes, plurals and the reveal label per OS
   lib/components/            Toolbar, file list, settings panel, format pickers
   lib/components/ui/         shadcn-svelte components
