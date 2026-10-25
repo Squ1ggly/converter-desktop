@@ -44,8 +44,10 @@ jobs:
         include:
           - target: aarch64-apple-darwin
             runner: macos-latest
+          # Cross-compiled: pnpm 11 has no native build for Intel Macs, so it can't run on
+          # macos-15-intel. The installer is still tested on an Intel Mac below.
           - target: x86_64-apple-darwin
-            runner: macos-15-intel
+            runner: macos-latest
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
           - target: aarch64-pc-windows-msvc
@@ -85,10 +87,14 @@ jobs:
 
       - name: Record the FFmpeg build configuration
         run: |
-          ffmpeg_path="src-tauri/binaries/converter-ffmpeg-$TARGET$([[ $TARGET == *windows* ]] && echo .exe || true)"
+          ffmpeg_command=("src-tauri/binaries/converter-ffmpeg-$TARGET$([[ $TARGET == *windows* ]] && echo .exe || true)")
+          if [[ $TARGET == x86_64-apple-darwin && $(uname -m) == arm64 ]]; then
+            sudo softwareupdate --install-rosetta --agree-to-license
+            ffmpeg_command=(arch -x86_64 "${ffmpeg_command[@]}")
+          fi
           mkdir -p installers
           buildconf_path="installers/ffmpeg-buildconf-$TARGET.txt"
-          { "$ffmpeg_path" -version; echo; "$ffmpeg_path" -hide_banner -buildconf; } > "$buildconf_path"
+          { "${ffmpeg_command[@]}" -version; echo; "${ffmpeg_command[@]}" -hide_banner -buildconf; } > "$buildconf_path"
           cat "$buildconf_path"
           # THIRD-PARTY-NOTICES.md says the builds are GPL version 3 or later.
           grep -q -- "--enable-gpl" "$buildconf_path"
