@@ -52,8 +52,9 @@ Each user's settings and logs are kept separately; see [Settings and data](setti
 
 ## macOS
 
-1. Open the `.dmg` and drag Converter into Applications.
-2. Open Converter from Applications.
+1. Open the `.dmg` and click **Agree** to accept the licence.
+2. Drag Converter into Applications.
+3. Open Converter from Applications.
 
 Today's builds are not notarised by Apple, so macOS blocks the first launch. What to do depends on
 the macOS version.
