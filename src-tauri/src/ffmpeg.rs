@@ -6,9 +6,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{ChildStderr, ChildStdout, Command};
+use tokio::process::{Child, ChildStderr, ChildStdout, Command};
 use tokio_util::sync::CancellationToken;
 
+use crate::child_lifetime;
 use crate::error::{ConversionError, ConversionResult};
 
 // Enough of FFmpeg's log to find the real error, which is usually near the end.
@@ -69,7 +70,7 @@ impl Ffmpeg {
     }
 
     // Reports 0–99% progress when the input has a known duration.
-    // Cancelling kills the process.
+    // Cancelling kills the process and waits for it to exit.
     pub async fn run(
         &self,
         arguments: Vec<OsString>,
@@ -94,8 +95,11 @@ impl Ffmpeg {
         hide_console_window(&mut command);
 
         let mut child = command.spawn()?;
-        let stdout = child.stdout.take().expect("stdout is piped");
-        let stderr = child.stderr.take().expect("stderr is piped");
+        child_lifetime::end_with_app(&child);
+        let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+            stop_process(&mut child).await;
+            return Err(std::io::Error::other("FFmpeg's output couldn't be read").into());
+        };
 
         let total_duration_microseconds = Arc::new(AtomicU64::new(0));
         let stderr_task = tokio::spawn(collect_stderr(stderr, total_duration_microseconds.clone()));
@@ -104,12 +108,16 @@ impl Ffmpeg {
             report_progress(stdout, &total_duration_microseconds, on_progress).await;
             child.wait().await
         };
-
-        // Returning early drops `child`, and `kill_on_drop` stops the process.
-        let exit_status = tokio::select! {
-            exit_status = run_to_completion => exit_status?,
-            _ = cancellation.cancelled() => return Err(ConversionError::Cancelled),
+        let finished_exit_status = tokio::select! {
+            exit_status = run_to_completion => Some(exit_status),
+            () = cancellation.cancelled() => None,
         };
+
+        let Some(exit_status) = finished_exit_status else {
+            stop_process(&mut child).await;
+            return Err(ConversionError::Cancelled);
+        };
+        let exit_status = exit_status?;
 
         if exit_status.success() {
             return Ok(());
@@ -118,6 +126,14 @@ impl Ffmpeg {
         let stderr_lines = stderr_task.await.unwrap_or_default();
         let error_message = extract_error_message(&stderr_lines);
         Err(ConversionError::Ffmpeg(error_message))
+    }
+}
+
+// Waits for the process to end, so its files are closed before the caller
+// deletes them. Windows can't delete a file another process has open.
+async fn stop_process(child: &mut Child) {
+    if let Err(error) = child.kill().await {
+        log::warn!("couldn't stop FFmpeg: {error}");
     }
 }
 

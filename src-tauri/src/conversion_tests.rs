@@ -604,6 +604,10 @@ async fn cancelling_stops_ffmpeg() {
 
     assert!(matches!(run_result, Err(ConversionError::Cancelled)));
     assert!(started_at.elapsed() < std::time::Duration::from_secs(5));
+    // FFmpeg has exited by now, so even on Windows nothing holds the files open.
+    directory
+        .close()
+        .expect("remove the folder FFmpeg was writing to");
 }
 
 fn assert_too_large(conversion_result: Result<PathBuf, ConversionError>, input: &str) {

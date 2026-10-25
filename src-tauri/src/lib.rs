@@ -1,4 +1,5 @@
 mod batch;
+mod child_lifetime;
 mod commands;
 #[cfg(test)]
 mod conversion_tests;
@@ -8,6 +9,7 @@ mod formats;
 mod image_conversion;
 mod options;
 mod output_path;
+mod quit;
 mod scratch;
 mod state;
 mod video_conversion;
@@ -21,7 +23,7 @@ use crate::ffmpeg::Ffmpeg;
 use crate::state::{ActiveBatches, AppState, ProducedOutputs};
 
 // Must match the window listed in capabilities/default.json.
-const MAIN_WINDOW_LABEL: &str = "main";
+pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 
 // Centres the window buttons in the 52px toolbar (h-13 in Toolbar.svelte).
 // Measured: macOS offsets the buttons from this point, so it isn't (52 - 14) / 2.
@@ -30,7 +32,7 @@ const TRAFFIC_LIGHT_POSITION: (f64, f64) = (18.0, 27.0);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // Must be registered first. A second launch focuses the open window instead
         // of starting another copy, which would clear this one's scratch folder.
         .plugin(tauri_plugin_single_instance::init(
@@ -65,9 +67,17 @@ pub fn run() {
             commands::cancel_conversion,
             commands::reveal_output,
             commands::open_output,
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running the Converter app");
+        ]);
+
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .menu(quit::build_macos_menu)
+        .on_menu_event(quit::handle_menu_event);
+
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("error while starting the Converter app");
+    app.run(quit::handle_run_event);
 }
 
 // Built in code so the macOS title bar options don't need a second config.
@@ -112,7 +122,7 @@ fn create_app_state(app: &App) -> AppState {
     app_state
 }
 
-fn focus_main_window(app: &AppHandle) {
+pub(crate) fn focus_main_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) else {
         return;
     };

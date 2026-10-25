@@ -33,6 +33,9 @@ written to the [log](settings-and-data.md#where-files-are-kept).
 | The window shows "Couldn't start" | The app failed to load. The message and the log say why. |
 | The app is blocked on first launch | The builds are unsigned. See [Installing](installing.md). |
 
-Closing the window during a conversion asks first, then cancels and removes unfinished files. If
+Closing the window or choosing **Quit Converter** (⌘Q) on macOS during a conversion asks first,
+then cancels and removes unfinished files. If the app is made to quit another way, for example
+when you log out, it stops every conversion and removes unfinished files before it closes. If
 the app crashes mid-conversion, the file being written can be left incomplete. Delete it and
-convert again.
+convert again. FFmpeg never keeps running after the app has gone: it is stopped on quit, and on
+Windows also when the app crashes.

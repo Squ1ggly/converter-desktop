@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::time::Duration;
 
 use tokio_util::sync::CancellationToken;
 
@@ -18,6 +19,7 @@ pub struct AppState {
 #[derive(Default)]
 pub struct ActiveBatches {
     batches: Mutex<HashMap<String, BatchEntry>>,
+    batch_finished: Condvar,
 }
 
 struct BatchEntry {
@@ -54,6 +56,32 @@ impl ActiveBatches {
 
     pub fn finish(&self, batch_id: &str) {
         lock_ignoring_poison(&self.batches).remove(batch_id);
+        self.batch_finished.notify_all();
+    }
+
+    pub fn is_any_running(&self) -> bool {
+        let batches = lock_ignoring_poison(&self.batches);
+        let is_any_running = batches.values().any(|entry| entry.is_running);
+        is_any_running
+    }
+
+    pub fn cancel_all(&self) {
+        for entry in lock_ignoring_poison(&self.batches).values() {
+            entry.cancellation.cancel();
+        }
+    }
+
+    // Returns false if batches were still running when the time ran out.
+    pub fn wait_until_finished(&self, timeout: Duration) -> bool {
+        let batches = lock_ignoring_poison(&self.batches);
+        let (batches, _timeout_result) = self
+            .batch_finished
+            .wait_timeout_while(batches, timeout, |batches| {
+                batches.values().any(|entry| entry.is_running)
+            })
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let has_finished = !batches.values().any(|entry| entry.is_running);
+        has_finished
     }
 
     // `convert_files` runs on the async runtime and `cancel_conversion` on the
@@ -113,6 +141,40 @@ mod tests {
         assert!(active_batches.start("batch").is_err());
         active_batches.cancel("batch");
         assert!(first_run.is_cancelled());
+    }
+
+    #[test]
+    fn quitting_cancels_every_batch_and_waits_for_them_to_finish() {
+        let active_batches = Arc::new(ActiveBatches::default());
+        let first_batch = active_batches.start("images").expect("starts");
+        let second_batch = active_batches.start("videos").expect("starts");
+        assert!(active_batches.is_any_running());
+
+        let batches_for_worker = active_batches.clone();
+        let worker = std::thread::spawn(move || {
+            while !(first_batch.is_cancelled() && second_batch.is_cancelled()) {
+                std::thread::yield_now();
+            }
+            batches_for_worker.finish("images");
+            batches_for_worker.finish("videos");
+        });
+
+        active_batches.cancel_all();
+        let has_finished = active_batches.wait_until_finished(Duration::from_secs(5));
+
+        worker.join().unwrap();
+        assert!(has_finished);
+        assert!(!active_batches.is_any_running());
+    }
+
+    #[test]
+    fn waiting_gives_up_after_the_timeout() {
+        let active_batches = ActiveBatches::default();
+        active_batches.start("stuck").expect("starts");
+
+        let has_finished = active_batches.wait_until_finished(Duration::from_millis(50));
+
+        assert!(!has_finished);
     }
 
     #[test]

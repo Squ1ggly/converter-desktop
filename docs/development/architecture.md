@@ -17,9 +17,15 @@ sidecar.
 4. Each request is a batch. Images run in parallel, up to four at once or one per core if there are fewer. Videos run one at a time.
    Progress and results come back to the UI through a Tauri channel as `started`, `progress`,
    `completed`, `failed` and `cancelled` events.
-5. `cancel_conversion` cancels a batch's token. Waiting files are marked cancelled, and running
-   FFmpeg processes are killed.
-6. `open_output` and `reveal_output` only accept files the app wrote in the current session.
+5. `cancel_conversion` cancels a batch's token, even if it arrives before the batch has started.
+   Waiting files are marked cancelled, and running FFmpeg processes are killed and waited for, so
+   their files can be deleted on Windows too.
+6. On quit (`RunEvent::Exit`), `quit.rs` cancels every batch and waits up to three seconds for
+   them to clean up. On macOS the app menu's **Quit** item is replaced, because the default one
+   ends the app without a close request. While converting, it sends `quit-requested` to the main
+   window instead, and the UI shows the same dialog as for closing the window. On Windows, FFmpeg
+   runs in a job object that the system kills when the app ends, even after a crash.
+7. `open_output` and `reveal_output` only accept files the app wrote in the current session.
 
 ## Images
 
@@ -67,6 +73,8 @@ src-tauri/src/
   image_conversion/          decode.rs, geometry.rs (resize, flatten onto white), encode.rs
   video_conversion.rs        FFmpeg arguments for each video format
   ffmpeg.rs                  Runs the bundled FFmpeg with progress and cancellation
+  child_lifetime.rs          Ends child processes with the app (a job object on Windows)
+  quit.rs                    Stops conversions on quit, and the macOS Quit menu item
   state.rs                   Active batches and the outputs written this session
   error.rs                   Error messages shown to the user
   conversion_tests.rs        Real conversions through the bundled FFmpeg
