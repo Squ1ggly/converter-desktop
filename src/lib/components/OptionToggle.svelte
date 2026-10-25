@@ -1,7 +1,7 @@
 <script lang="ts" generics="Value extends string">
   import * as Field from "$lib/components/ui/field/index.js";
   import * as ToggleGroup from "$lib/components/ui/toggle-group/index.js";
-  import { SELECTED_TOGGLE_CLASS } from "$lib/styles";
+  import { SELECTED_TOGGLE_CLASS, TOGGLE_GROUP_STYLE } from "$lib/styles";
 
   interface Props {
     label: string;
@@ -23,7 +23,7 @@
 
 <Field.Set>
   <Field.Legend variant="label">{label}</Field.Legend>
-  <ToggleGroup.Root type="single" variant="outline" class="w-full" {value} onValueChange={selectOption} aria-label={label}>
+  <ToggleGroup.Root type="single" {...TOGGLE_GROUP_STYLE} class="w-full" {value} onValueChange={selectOption} aria-label={label}>
     {#each options as option (option.value)}
       <ToggleGroup.Item value={option.value} class="flex-1 {SELECTED_TOGGLE_CLASS}">{option.label}</ToggleGroup.Item>
     {/each}
