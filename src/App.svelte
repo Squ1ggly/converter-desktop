@@ -387,7 +387,7 @@
 </Tooltip.Provider>
 
 {#if isDraggingFiles}
-  <DropOverlay />
+  <DropOverlay isConverting={queue.isConverting} />
 {/if}
 
 <QuitDialog bind:open={isQuitDialogOpen} {isQuitting} onQuit={quitAfterCancelling} />

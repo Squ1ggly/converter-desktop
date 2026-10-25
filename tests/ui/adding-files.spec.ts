@@ -181,3 +181,16 @@ test("an empty list shows progress while a folder is scanned", async ({ page }) 
   await backend.releaseScans();
   await expect(page.getByRole("heading", { name: "2 files" })).toBeVisible();
 });
+
+test("while converting, the drop overlay says files can't be added", async ({ page }) => {
+  const backend = await launchConverter(page, { conversionMode: "manual" });
+  await backend.dropFiles([BEACH_PHOTO]);
+  await page.getByRole("button", { name: "Convert 1 file" }).click();
+
+  await backend.dragFilesOver([CITY_PHOTO]);
+
+  await expect(page.getByText("Wait for the conversion to finish")).toBeVisible();
+  await expect(page.getByText("Drop to add")).toHaveCount(0);
+  await backend.dragAway();
+  await expect(page.getByText("Wait for the conversion to finish")).toBeHidden();
+});

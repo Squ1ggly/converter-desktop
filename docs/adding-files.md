@@ -40,8 +40,8 @@ converting waits until then.
 - **Unsupported files** you drop or pick directly are skipped, and a "Skipped N unsupported files"
   message names up to three of them.
 - **Duplicates**: a file that is already in the list is not added again.
-- **During a conversion** nothing can be added. Dropping files shows "Wait for the current
-  conversion to finish."
+- **During a conversion** nothing can be added. Dragging files over the window shows "Wait for
+  the conversion to finish" instead of "Drop to add".
 
 ## Removing files
 
