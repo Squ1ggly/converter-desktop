@@ -39,10 +39,21 @@
     onConvert,
     onCancel,
   }: Props = $props();
+
+  let scrollViewport = $state<HTMLElement | null>(null);
+
+  // While converting every control is disabled, so the panel itself takes
+  // focus to let keyboard users scroll through the locked settings.
+  $effect(() => {
+    if (!scrollViewport) {
+      return;
+    }
+    scrollViewport.tabIndex = isConverting ? 0 : -1;
+  });
 </script>
 
 <aside class="bg-muted/30 flex min-h-0 flex-col border-l" aria-label="Settings">
-  <ScrollArea class="min-h-0 flex-1">
+  <ScrollArea class="min-h-0 flex-1" bind:viewportRef={scrollViewport}>
     <!-- A disabled fieldset locks every control while files convert. -->
     <fieldset class="flex min-w-0 flex-col gap-6 p-5" disabled={isConverting}>
       {#if hasImages}
