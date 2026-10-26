@@ -41,6 +41,7 @@ written to the [log](settings-and-data.md#where-files-are-kept).
 | "Couldn't load your settings" | `settings.json` can't be read. The app uses the defaults and doesn't save changes. Quit and delete the file to start again. See [Settings and data](settings-and-data.md#where-files-are-kept). |
 | Opening the app again shows the same window | Only one copy runs at a time. Opening it again brings the open window to the front. |
 | The app is blocked on first launch | The builds are unsigned. See [Installing](installing.md). |
+| The window is blank on Linux | Some systems with Wayland and an NVIDIA graphics card can't draw it. See [If the window is blank](installing.md#if-the-window-is-blank). |
 
 Closing the window or choosing **Quit Converter** (⌘Q) on macOS during a conversion asks first,
 then cancels and removes unfinished files. If the app is made to quit another way, for example

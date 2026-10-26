@@ -113,3 +113,14 @@ test("a link to another guide page also opens with the keyboard", async ({ page 
 
   await expect(helpPages(page).filter({ hasText: "Saving" })).toHaveAttribute("aria-current", "page");
 });
+
+test("the blank window tip opens at its heading on GitHub", async ({ page }) => {
+  const backend = await openHelp(page);
+  await helpPages(page).filter({ hasText: "Troubleshooting" }).click();
+
+  await guideArticle(page).getByRole("link", { name: "If the window is blank" }).click();
+
+  await expect
+    .poll(async () => (await backend.readLog()).openedUrls)
+    .toEqual([`${REPOSITORY_URL}/docs/installing.md#if-the-window-is-blank`]);
+});
