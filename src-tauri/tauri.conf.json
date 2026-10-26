@@ -33,12 +33,20 @@
     "externalBin": [
       "binaries/converter-ffmpeg"
     ],
+    "resources": {
+      "../LICENSE": "LICENSE",
+      "../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md",
+      "../licenses/FFmpeg/COPYING.GPLv3": "licenses/FFmpeg/COPYING.GPLv3",
+      "../licenses/FFmpeg/LICENSE.md": "licenses/FFmpeg/LICENSE.md"
+    },
+    "publisher": "Squ1ggly",
+    "homepage": "https://github.com/Squ1ggly/converter-desktop",
     "category": "Utility",
     "shortDescription": "Convert images and videos",
     "longDescription": "Convert images and videos between formats on your own computer. Nothing is uploaded.",
-    "license": "MIT",
+    "license": "MIT AND GPL-3.0-or-later",
     "licenseFile": "../LICENSE",
-    "copyright": "© 2026 Squ1ggly",
+    "copyright": "Copyright © 2026 Squ1ggly",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -47,9 +55,13 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "12.0",
+      "signingIdentity": "-"
     },
     "windows": {
+      "wix": {
+        "upgradeCode": "4a4c23da-9be9-431a-9586-7c5b42be283f"
+      },
       "nsis": {
         "installMode": "perMachine"
       }
