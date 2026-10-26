@@ -41,8 +41,10 @@ titled `chore(main): release x.y.z`. It bumps the version in `package.json`,
 `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` and `src-tauri/tauri.conf.json`, and adds the
 changes to `CHANGELOG.md`. Don't change these versions by hand.
 
-To release, merge the release PR. That tags the commit and creates the GitHub release, then the
-Release workflow builds the installers for every platform and attaches them to it.
+To release, merge the release PR. That tags the commit and creates a draft GitHub release. The
+Release workflow then builds and tests the installers for every platform and attaches them, with
+the FFmpeg source, to the draft. The release is published only if every installer passed. If any
+job fails, the release stays a draft, which only maintainers can see.
 
 To build installers without releasing, run the Release workflow from the Actions tab. The
 installers are attached to the run as artifacts.
