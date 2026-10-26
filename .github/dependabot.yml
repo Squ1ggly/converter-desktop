@@ -23,7 +23,10 @@ updates:
         update-types: [minor, patch]
 
   - package-ecosystem: github-actions
-    directory: /
+    # The composite action pins its own actions by SHA, so it needs updating too.
+    directories:
+      - /
+      - /.github/actions/setup
     schedule:
       interval: weekly
     commit-message:

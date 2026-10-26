@@ -34,17 +34,6 @@ pub async fn inspect_input_paths(
     Ok(inspection)
 }
 
-// The original command, returning only the files. Kept until the UI calls
-// inspect_input_paths, which also says when the file limit was reached.
-#[tauri::command]
-pub async fn inspect_paths(
-    app: AppHandle,
-    paths: Vec<PathBuf>,
-) -> Result<Vec<InspectedFile>, String> {
-    let inspection = inspect_input_paths(app, paths).await?;
-    Ok(inspection.files)
-}
-
 // The webview can load these files through the asset protocol, one file at a
 // time, for thumbnails. Nothing else is readable.
 fn allow_image_previews(app: &AppHandle, files: &[InspectedFile]) {
