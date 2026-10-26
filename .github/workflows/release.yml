@@ -60,6 +60,8 @@ jobs:
     uses: ./.github/workflows/installers.yml
     with:
       sign: true
+      # Build the tagged release commit, not whichever commit started this run.
+      ref: ${{ needs.release-please.outputs.tag_name }}
     secrets: inherit
     permissions:
       contents: read
