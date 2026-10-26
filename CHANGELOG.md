@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/Squ1ggly/converter-desktop/compare/v0.1.0...v0.1.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* **ci:** build release installers from the release tag ([7552db2](https://github.com/Squ1ggly/converter-desktop/commit/7552db215e4537920f661e3339dfb506e3b953e4))
+
 ## 0.1.0 (2026-10-26)
 
 
