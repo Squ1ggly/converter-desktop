@@ -81,7 +81,7 @@ tests them. It runs on PRs that change packaging, from the Actions tab, and insi
 | Platform | Machines | What it checks |
 |---|---|---|
 | macOS | Apple Silicon and Intel runners | Installs the `.dmg` into `/Applications`, verifies the signature, checks the minimum macOS version of the app and of FFmpeg, launches the app and quits it |
-| Windows | x64, ARM64, and the x64 build on ARM64 | Installs the NSIS and the MSI installer silently, checks the files and their processor type, launches the app and its WebView2, uninstalls |
+| Windows | x64, ARM64, and the x64 build on ARM64 | Installs the NSIS and the MSI installer silently, checks the files, their processor type and, for signed builds, their signatures, launches the app and its WebView2, uninstalls |
 | Linux | x64 and ARM64 containers of Ubuntu 22.04 and 24.04, Debian 12 and 13, Fedora 40 and latest, openSUSE Leap 15.6 | Installs the `.deb` or `.rpm` with the system's package manager, checks every library resolves, launches the app and its web view under Xvfb, removes the package |
 
 On every machine, `scripts/smoke-tests/ffmpeg.sh` runs the installed `converter-ffmpeg` through
@@ -95,8 +95,8 @@ platform, and attaches the installers to the run as artifacts.
 
 ## Signing
 
-Builds are signed automatically once the secrets below exist in the repository's Actions
-secrets. Only the Release workflow signs; PR builds never do. Without the secrets, macOS builds
+Builds are signed automatically once the secrets and variables below exist in the repository's
+Actions settings. Only the Release workflow signs; PR builds never do. Without the secrets, macOS builds
 are ad-hoc signed and Windows installers are unsigned, and users see the warnings described in
 [Installing](../installing.md).
 
@@ -131,9 +131,42 @@ temporary keychain with a random password, so no keychain password secret is nee
 
 ### Windows signing
 
-Choose one.
+Choose one. If more than one is set up, SignPath is used first, then the certificate, then Azure
+Artifact Signing.
 
-**Azure Artifact Signing** (recommended, and the cheapest way to build SmartScreen reputation):
+**SignPath Foundation** (free for open source projects, and what this repository uses). SignPath
+Foundation owns the certificate, so Windows shows it as the publisher. To set it up:
+
+1. Apply at [signpath.org](https://signpath.org/apply.html). SignPath Foundation needs
+   [CODE_SIGNING.md](../../CODE_SIGNING.md), linked from the README and from every release. The
+   Release workflow adds the link to each release's notes. Keep the page's team list current.
+2. Turn on two-factor authentication for GitHub and SignPath. Everyone on the team needs it.
+3. In SignPath, add the predefined **GitHub.com** trusted build system to the organisation and
+   link it to the project.
+4. In the project, create two artifact configurations with the slugs `app` and `installers`,
+   from the files in `.signpath/artifact-configurations/`.
+5. Create a CI user that can submit requests to the release signing policy, and an API token for
+   it.
+6. Add these to the repository:
+
+   | Kind | Name | Value |
+   |---|---|---|
+   | Secret | `SIGNPATH_API_TOKEN` | The CI user's API token |
+   | Variable | `SIGNPATH_ORGANIZATION_ID` | The SignPath organisation ID |
+   | Variable | `SIGNPATH_PROJECT_SLUG` | The SignPath project slug |
+   | Variable | `SIGNPATH_SIGNING_POLICY_SLUG` | The release signing policy's slug, usually `release-signing` |
+
+7. Run the Release workflow from the Actions tab to try it. It doesn't release anything, but it
+   does send signing requests.
+
+Each Windows build sends two signing requests: one for `converter.exe`, then one for the
+installers built around the signed app. A release builds x64 and ARM64, so it needs four
+approvals in SignPath. Each build waits up to an hour for an approval, then fails; click
+**Re-run failed jobs** to send the request again. The installers are bundled with
+`--no-binary-patching`, so bundling doesn't change the signed app. The Windows install test
+checks that a signed installer installs a signed app.
+
+**Azure Artifact Signing** (paid, and the cheapest paid way to build SmartScreen reputation):
 
 | Kind | Name | Value |
 |---|---|---|
@@ -156,7 +189,7 @@ Certificates issued since June 2023 keep their private key on a hardware token o
 can't be exported as `.pfx`. For those, use Azure Artifact Signing, or replace the sign command in
 `scripts/release/windows-signing-config.ps1` with the certificate authority's signing tool.
 
-If both are configured, the certificate is used. `scripts/release/build-installers.sh` and
+`.github/workflows/installers.yml`, `scripts/release/build-installers.sh` and
 `scripts/release/windows-signing-config.ps1` hold the logic.
 
 ## Third-party notices
