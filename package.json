@@ -10,6 +10,7 @@
     "ui:build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json && tsc -p tests/e2e",
     "fetch-ffmpeg": "node scripts/fetch-ffmpeg.ts",
+    "notices": "node scripts/generate-notices.ts",
     "test:ui": "playwright test --project=webkit --project=chromium",
     "test:e2e": "wdio run tests/e2e/wdio.conf.ts",
     "screenshots": "playwright test --project=screenshots"
