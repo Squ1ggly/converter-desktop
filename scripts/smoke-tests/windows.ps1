@@ -1,5 +1,6 @@
-# Installs Converter silently from an NSIS or MSI installer, checks the installed files, runs
-# FFmpeg, launches the app, then uninstalls it and checks the files are gone.
+# Installs Converter silently from an NSIS or MSI installer, checks the installed files and, for
+# signed builds, their signatures, runs FFmpeg, launches the app, then uninstalls it and checks the
+# files are gone.
 #
 #   pwsh scripts/smoke-tests/windows.ps1 <installer>
 param([Parameter(Mandatory)] [string] $InstallerPath)
@@ -79,6 +80,23 @@ function Assert-InstalledFiles([string] $expectedMachine) {
   Write-Output "ok   installed files are present and built for $expectedMachine"
 }
 
+# A signed installer must install a signed app. The bundled FFmpeg comes unsigned from upstream.
+function Assert-Signatures {
+  $installerSignature = Get-AuthenticodeSignature $InstallerPath
+  if ($installerSignature.Status -eq "NotSigned") {
+    Write-Output "ok   the installer is unsigned"
+    return
+  }
+
+  foreach ($signedPath in @($InstallerPath, $appPath)) {
+    $signature = Get-AuthenticodeSignature $signedPath
+    if ($signature.Status -ne "Valid") {
+      Fail "The signature of $signedPath is $($signature.Status): $($signature.StatusMessage)"
+    }
+  }
+  Write-Output "ok   the installer and the app are signed by $($installerSignature.SignerCertificate.Subject)"
+}
+
 function Assert-FfmpegWorks {
   $versionOutput = & $ffmpegPath -hide_banner -version
   if ($LASTEXITCODE -ne 0) {
@@ -119,6 +137,7 @@ Write-Output "Testing $installerName on $env:PROCESSOR_ARCHITECTURE Windows"
 
 Install-Converter
 Assert-InstalledFiles $expectedMachine
+Assert-Signatures
 Assert-FfmpegWorks
 Assert-AppLaunches
 Uninstall-Converter
