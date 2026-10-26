@@ -9,7 +9,7 @@ Click the gear icon at the top right, or press ⌘, (Ctrl+, on Windows and Linux
   files.
 - **Save to**: where converted files go.
 
-Click **Back** to return. Settings can't be changed while files are converting.
+Click **Back** to return. While files are converting, everything except **Appearance** is locked.
 
 ## What is remembered
 
