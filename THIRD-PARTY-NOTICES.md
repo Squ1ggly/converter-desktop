@@ -59,7 +59,7 @@ These npm packages are built into the app's user interface.
 | [@tauri-apps/plugin-dialog](https://github.com/tauri-apps/plugins-workspace) | 2.8.3 | MIT OR Apache-2.0 |
 | [@tauri-apps/plugin-opener](https://github.com/tauri-apps/plugins-workspace) | 2.7.2 | MIT OR Apache-2.0 |
 | [@tauri-apps/plugin-store](https://github.com/tauri-apps/plugins-workspace) | 2.5.0 | MIT OR Apache-2.0 |
-| [bits-ui](https://github.com/huntabyte/bits-ui) | 2.20.0 | MIT |
+| [bits-ui](https://github.com/huntabyte/bits-ui) | 2.20.1 | MIT |
 | [clsx](https://github.com/lukeed/clsx) | 2.1.1 | MIT |
 | [cn](https://github.com/shadcn-ui/cn) | 0.5.0 | MIT |
 | [esm-env](https://github.com/benmccann/esm-env) | 1.2.2 | MIT |
@@ -2768,7 +2768,7 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ````
 
-### bits-ui 2.20.0
+### bits-ui 2.20.1
 
 ````text
 MIT License
