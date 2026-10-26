@@ -83,6 +83,6 @@ pnpm build --target x86_64-apple-darwin
 
 A build with `--target` is written to `src-tauri/target/<triple>/release/bundle/`.
 
-The [Release workflow](releasing.md) builds every platform on GitHub Actions. Builds are not
-signed. Signing needs [macOS signing and notarisation](https://v2.tauri.app/distribute/sign/macos/)
-and [Windows code signing](https://v2.tauri.app/distribute/sign/windows/) to be set up.
+The [Release workflow](releasing.md) builds every platform on GitHub Actions, and signs the
+builds when signing is set up. See [Signing](releasing.md#signing). Local builds are ad-hoc
+signed on macOS and unsigned on Windows.

@@ -46,6 +46,12 @@ pnpm dev            # runs the app with hot reload
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org). The [code signing policy](CODE_SIGNING.md) lists what
+is signed, who approves it, and the privacy policy.
+
 ## Licence
 
 Converter is MIT-licensed; see [LICENSE](LICENSE).
