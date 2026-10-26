@@ -32,8 +32,9 @@ output is removed. For quitting in other ways, see [Troubleshooting](troubleshoo
 
 ## Results
 
-When every file has finished, the heading shows how many converted, plus how many failed or were
-cancelled. If none converted, the heading shows how many failed, for example "3 failed".
+Each converted file is marked **Done**. When every file has finished, the heading shows how many
+converted, plus how many failed or were cancelled. If none converted, the heading shows how many
+failed, for example "3 failed".
 
 | Action | Where | What it does |
 |---|---|---|
