@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as Kbd from "$lib/components/ui/kbd/index.js";
-  import { shortcutKeys, type Shortcut } from "$lib/formatting";
+  import { shortcutKeys, type Shortcut } from "$lib/shortcuts";
 
   interface Props {
     shortcut: Shortcut;
@@ -12,8 +12,10 @@
   const keys = $derived(shortcutKeys(shortcut, platform));
 </script>
 
-<Kbd.Group class="ml-1 opacity-70" aria-hidden="true">
-  {#each keys as key (key)}
-    <Kbd.Root>{key}</Kbd.Root>
-  {/each}
-</Kbd.Group>
+{#if keys.length > 0}
+  <Kbd.Group class="ml-1 opacity-70" aria-hidden="true">
+    {#each keys as key (key)}
+      <Kbd.Root>{key}</Kbd.Root>
+    {/each}
+  </Kbd.Group>
+{/if}

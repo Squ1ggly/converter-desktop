@@ -37,7 +37,7 @@ Every image goes through decode, resize and encode, so any input can become any 
 
 | Step | How |
 |---|---|
-| Decode | The `image` crate (JPG, PNG, WebP, GIF, BMP, TIFF), applying EXIF orientation and converting colours to sRGB with `moxcms` (`color.rs`). `resvg` for SVG, `hayro` for the first page of a PDF. FFmpeg for HEIC, HEIF and AVIF, and as a fallback for misnamed files. |
+| Decode | The `image` crate (JPG, PNG, WebP, GIF, BMP, TIFF), applying EXIF orientation and converting colours to sRGB with `moxcms` (`color.rs`). `resvg` for SVG, `hayro` for the first page of a PDF. FFmpeg for HEIC, HEIF and AVIF, and as a fallback for misnamed files. FFmpeg reads a HEIF alpha plane as a separate stream (a stream group for tiled images), so `heif.rs` reads the container to find it, FFmpeg merges the two with `alphamerge`, and the main image's rotation and mirroring are applied afterwards. |
 | Resize | Lanczos3. SVG and PDF are rendered straight at the target size instead. |
 | Encode | The `image` crate for JPG, PNG, GIF, BMP and TIFF. FFmpeg for WebP (`libwebp`) and AVIF (`libaom-av1`). `pdf-writer` for PDF. `vtracer` for SVG. macOS `sips` for HEIC. |
 
@@ -61,9 +61,15 @@ src/
   App.svelte                 Wires the queue, settings, drag and drop, and shortcuts together
   lib/backend.ts             Typed wrappers for the Rust commands
   lib/queue.svelte.ts        The file list and each file's conversion state
+  lib/conversion-run.svelte.ts  Starts, cancels and waits for a conversion
+  lib/file-adder.svelte.ts   Adds dropped or picked paths, and reports skipped files
+  lib/file-pickers.ts        The native file and folder pickers
+  lib/quit-guard.svelte.ts   Asks before closing mid-conversion, then cancels and quits
+  lib/shortcuts.ts           Keyboard shortcuts and their key labels per OS
   lib/requests.ts            Builds one conversion request per kind from the list and settings
-  lib/preferences.svelte.ts  Remembered settings, stored with the Tauri store plugin
-  lib/formatting.ts          Sizes, plurals, shortcut keys and the reveal label per OS
+  lib/preferences.ts         Settings, their defaults and the check on saved values
+  lib/preference-store.svelte.ts  Remembered settings, stored with the Tauri store plugin
+  lib/formatting.ts          Sizes, plurals and the reveal label per OS
   lib/components/            Toolbar, file list, settings panel, format pickers
   lib/components/ui/         shadcn-svelte components
 src-tauri/src/

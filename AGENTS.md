@@ -369,8 +369,8 @@ Windows, and the end-to-end tests on Linux and Windows. See [Testing](CONTRIBUTI
   link must work both on GitHub and in the app.
 - Link with relative paths to `.md` files, for example `[Saving](saving.md#file-names)`. Links
   between user guide pages open in the app. Links outside `docs/` open on GitHub in the browser.
-- Help only shows the pages listed in `PAGE_ORDER` in `src/lib/guide.ts`. Add a new user guide
-  page there too.
+- Help shows the pages in the "Using the app" table of `docs/README.md`, in that order, except
+  Installing. Add a new user guide page to that table.
 - Update the docs in the same change as the behaviour they describe.
 
 ### 4.3 UI

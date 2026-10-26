@@ -1,4 +1,5 @@
 use std::ffi::OsString;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
@@ -7,6 +8,7 @@ use hayro::hayro_syntax::{LoadPdfError, Pdf};
 use hayro::vello_cpu::color::palette::css::WHITE;
 use hayro::vello_cpu::peniko::ImageAlphaType;
 use hayro::{PixmapSettings, RenderCache, RenderSettings};
+use image::metadata::Orientation;
 use image::{DynamicImage, ImageDecoder, ImageReader, Limits, RgbaImage};
 use resvg::{tiny_skia, usvg};
 use tokio_util::sync::CancellationToken;
@@ -16,6 +18,7 @@ use super::geometry::{
     Dimensions, MAX_IMAGE_PIXELS, ensure_source_fits, ensure_target_fits, target_dimensions,
     whole_pixels,
 };
+use super::heif::{HeifImage, HeifItem, apply_transforms, read_heif_image};
 use super::run_blocking;
 use crate::error::{ConversionError, ConversionResult};
 use crate::ffmpeg::Ffmpeg;
@@ -101,21 +104,35 @@ async fn decode_raster(
     Ok(decoded_image)
 }
 
-// Applies the EXIF orientation so phone photos aren't saved sideways, and
-// converts colours to sRGB.
+// Applies the EXIF orientation so phone photos aren't saved sideways.
 fn decode_with_image_crate(input_path: &Path) -> ConversionResult<DynamicImage> {
+    let decoded_image = read_with_image_crate(input_path)?;
+    let mut image = decoded_image.image;
+    image.apply_orientation(decoded_image.exif_orientation);
+    Ok(image)
+}
+
+struct DecodedImage {
+    image: DynamicImage,
+    exif_orientation: Orientation,
+}
+
+// Converts colours to sRGB, and leaves the EXIF orientation to the caller.
+fn read_with_image_crate(input_path: &Path) -> ConversionResult<DecodedImage> {
     let mut reader = ImageReader::open(input_path)?.with_guessed_format()?;
     reader.limits(decode_limits());
     let mut decoder = reader.into_decoder().map_err(describe_decode_error)?;
     let (width, height) = decoder.dimensions();
     ensure_source_fits(Dimensions { width, height })?;
-    let orientation = decoder.orientation()?;
+    let exif_orientation = decoder.orientation()?;
     let icc_profile = decoder.icc_profile()?;
 
-    let decoded_image = DynamicImage::from_decoder(decoder).map_err(describe_decode_error)?;
-    let mut image = convert_to_srgb(decoded_image, icc_profile.as_deref());
-    image.apply_orientation(orientation);
-    Ok(image)
+    let decoded_pixels = DynamicImage::from_decoder(decoder).map_err(describe_decode_error)?;
+    let decoded_image = DecodedImage {
+        image: convert_to_srgb(decoded_pixels, icc_profile.as_deref()),
+        exif_orientation,
+    };
+    Ok(decoded_image)
 }
 
 fn describe_decode_error(error: image::ImageError) -> ConversionError {
@@ -140,6 +157,135 @@ async fn decode_with_ffmpeg(
     cancellation: &CancellationToken,
 ) -> ConversionResult<DynamicImage> {
     let readable_input_path = path_ffmpeg_can_read(input_path, scratch_directory)?;
+    let heif_image = read_heif_container(&readable_input_path).await;
+    let Some((heif_image, alpha_item)) =
+        heif_image.and_then(|heif_image| heif_image.alpha.map(|alpha| (heif_image, alpha)))
+    else {
+        return decode_colour_with_ffmpeg(
+            &readable_input_path,
+            ffmpeg,
+            scratch_directory,
+            cancellation,
+        )
+        .await;
+    };
+
+    let transparent_decode = TransparentDecode {
+        input_path: &readable_input_path,
+        heif_image: &heif_image,
+        alpha_item,
+        ffmpeg,
+        scratch_directory,
+        cancellation,
+    };
+    match decode_with_alpha(&transparent_decode).await {
+        Err(ConversionError::Cancelled) => Err(ConversionError::Cancelled),
+        Err(error) => {
+            log::warn!("read the image without its transparency: {error}");
+            decode_colour_with_ffmpeg(
+                &readable_input_path,
+                ffmpeg,
+                scratch_directory,
+                cancellation,
+            )
+            .await
+        }
+        decoded_image => decoded_image,
+    }
+}
+
+// The container's metadata sits at the start in practice, so the rest of a
+// large file isn't read. Files that aren't HEIF give None.
+const HEIF_METADATA_BYTES_READ: u64 = 16 * 1024 * 1024;
+
+async fn read_heif_container(input_path: &Path) -> Option<HeifImage> {
+    let owned_input_path = input_path.to_path_buf();
+    let heif_image = run_blocking(move || {
+        let mut file_start = Vec::new();
+        std::fs::File::open(&owned_input_path)?
+            .take(HEIF_METADATA_BYTES_READ)
+            .read_to_end(&mut file_start)?;
+        Ok(read_heif_image(&file_start))
+    })
+    .await
+    .ok()
+    .flatten();
+    heif_image
+}
+
+struct TransparentDecode<'a> {
+    input_path: &'a Path,
+    heif_image: &'a HeifImage,
+    alpha_item: HeifItem,
+    ffmpeg: &'a Ffmpeg,
+    scratch_directory: &'a Path,
+    cancellation: &'a CancellationToken,
+}
+
+// FFmpeg reads a HEIF alpha plane as a separate stream (or, for a grid, a
+// separate stream group), so the two are merged here. Both are read without
+// FFmpeg's rotation, which it may apply to one and not the other, and the
+// main image's rotation and mirroring are applied to the result.
+async fn decode_with_alpha(decode: &TransparentDecode<'_>) -> ConversionResult<DynamicImage> {
+    let has_grid = decode.heif_image.primary.is_grid || decode.alpha_item.is_grid;
+    let stream_group_ids = if has_grid {
+        decode
+            .ffmpeg
+            .stream_group_ids(decode.input_path, decode.cancellation)
+            .await?
+    } else {
+        Vec::new()
+    };
+    let colour_input = filter_input_for(decode.heif_image.primary, &stream_group_ids)?;
+    let alpha_input = filter_input_for(decode.alpha_item, &stream_group_ids)?;
+
+    let decoded_path = decode.scratch_directory.join("decoded.png");
+    let arguments: Vec<OsString> = vec![
+        "-noautorotate".into(),
+        "-i".into(),
+        decode.input_path.into(),
+        "-filter_complex".into(),
+        format!("[{colour_input}][{alpha_input}]alphamerge,format=rgba").into(),
+        "-frames:v".into(),
+        "1".into(),
+        "-f".into(),
+        "image2".into(),
+        "-update".into(),
+        "1".into(),
+        decoded_path.clone().into(),
+    ];
+    decode
+        .ffmpeg
+        .run(arguments, decode.cancellation, |_| {})
+        .await?;
+
+    let merged_image = run_blocking(move || read_with_image_crate(&decoded_path)).await?;
+    let upright_image = apply_transforms(merged_image.image, &decode.heif_image.primary_transforms);
+    Ok(upright_image)
+}
+
+// A plain item is a stream with the item's id. A grid is a stream group,
+// which FFmpeg only assembles from its tiles when it's named by position.
+fn filter_input_for(item: HeifItem, stream_group_ids: &[(usize, u32)]) -> ConversionResult<String> {
+    if !item.is_grid {
+        return Ok(format!("0:i:{}", item.id));
+    }
+    let group_index = stream_group_ids
+        .iter()
+        .find(|(_, group_id)| *group_id == item.id)
+        .map(|(group_index, _)| *group_index)
+        .ok_or_else(|| {
+            ConversionError::Ffmpeg(format!("FFmpeg didn't list image grid {}", item.id))
+        })?;
+    Ok(format!("0:g:{group_index}"))
+}
+
+async fn decode_colour_with_ffmpeg(
+    readable_input_path: &Path,
+    ffmpeg: &Ffmpeg,
+    scratch_directory: &Path,
+    cancellation: &CancellationToken,
+) -> ConversionResult<DynamicImage> {
     let decoded_path = scratch_directory.join("decoded.png");
     let arguments: Vec<OsString> = vec![
         "-i".into(),

@@ -2,7 +2,8 @@
 
 Converter turns images and videos into other formats on your own computer. Files are never uploaded.
 
-This guide is also in the app: click the question mark at the top right, or press F1.
+This guide is also in the app: click the question mark at the top right, or press ⌘? on macOS or
+F1 on Windows and Linux.
 
 ## Using the app
 

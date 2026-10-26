@@ -12,6 +12,8 @@ const DEFAULT_SCENARIO: MockScenario = {
   savedPreferences: null,
   conversionMode: "automatic",
   failingFiles: {},
+  failingCommands: {},
+  holdsCatalog: false,
 };
 
 export const test = base.extend<{ failOnPageErrors: void }>({
@@ -77,9 +79,29 @@ export class MockBackend {
     );
   }
 
+  async endBatchEarly(kind: MediaKind): Promise<void> {
+    await this.#page.evaluate((batchKind) => window.converterMockBackend.endBatchEarly(batchKind), kind);
+  }
+
+  async holdScans(): Promise<void> {
+    await this.#page.evaluate(() => window.converterMockBackend.holdScans());
+  }
+
+  async releaseScans(): Promise<void> {
+    await this.#page.evaluate(() => window.converterMockBackend.releaseScans());
+  }
+
+  async releaseCatalog(): Promise<void> {
+    await this.#page.evaluate(() => window.converterMockBackend.releaseCatalog());
+  }
+
   // Like clicking the window's close button.
   async requestWindowClose(): Promise<void> {
     await this.#page.evaluate(() => window.converterMockBackend.requestWindowClose());
+  }
+
+  async requestQuitFromMenu(): Promise<void> {
+    await this.#page.evaluate(() => window.converterMockBackend.requestQuitFromMenu());
   }
 
   async readLog(): Promise<BackendLog> {
@@ -95,17 +117,23 @@ export class MockBackend {
   }
 }
 
-// Opens the app and waits until it has loaded the catalog and preferences.
-export async function launchConverter(page: Page, scenarioChanges: Partial<MockScenario> = {}): Promise<MockBackend> {
+// Opens the app without waiting for it to finish starting.
+export async function openConverter(page: Page, scenarioChanges: Partial<MockScenario> = {}): Promise<MockBackend> {
   const scenario: MockScenario = { ...DEFAULT_SCENARIO, ...scenarioChanges };
   await page.addInitScript((initialScenario) => {
     window.converterScenario = initialScenario;
   }, scenario);
 
   await page.goto("/");
-  await expect(page.getByText("Drop images or videos")).toBeVisible();
 
   const backend = new MockBackend(page);
+  return backend;
+}
+
+// Opens the app and waits until it has loaded the catalog and preferences.
+export async function launchConverter(page: Page, scenarioChanges: Partial<MockScenario> = {}): Promise<MockBackend> {
+  const backend = await openConverter(page, scenarioChanges);
+  await expect(page.getByText("Drop images or videos")).toBeVisible();
   return backend;
 }
 

@@ -18,9 +18,15 @@ export function formatBytes(byteCount: number): string {
   return formattedSize;
 }
 
+// Groups digits, e.g. 10,000, to match the UI's English copy.
+export function formatCount(count: number): string {
+  const formattedCount = count.toLocaleString("en-US");
+  return formattedCount;
+}
+
 export function pluralise(count: number, singular: string, plural = `${singular}s`): string {
   const noun = count === 1 ? singular : plural;
-  const phrase = `${count} ${noun}`;
+  const phrase = `${formatCount(count)} ${noun}`;
   return phrase;
 }
 
@@ -43,27 +49,4 @@ export function revealInFolderLabel(platform: string): string {
     return "Show in Explorer";
   }
   return "Show in folder";
-}
-
-export type Shortcut = "open" | "convert" | "settings" | "help";
-
-// Key labels as each OS shows them, e.g. ⌘ O on macOS and Ctrl O elsewhere.
-export function shortcutKeys(shortcut: Shortcut, platform: string): string[] {
-  const isMac = platform === "macos";
-  const modifierKey = isMac ? "⌘" : "Ctrl";
-  const enterKey = isMac ? "↩" : "Enter";
-
-  const keysByShortcut: Record<Shortcut, string[]> = {
-    open: [modifierKey, "O"],
-    convert: [modifierKey, enterKey],
-    settings: [modifierKey, ","],
-    help: ["F1"],
-  };
-  const keys = keysByShortcut[shortcut];
-  return keys;
-}
-
-export function isPrimaryModifierPressed(event: KeyboardEvent, platform: string): boolean {
-  const isPressed = platform === "macos" ? event.metaKey : event.ctrlKey;
-  return isPressed;
 }

@@ -8,6 +8,10 @@ import { BEACH_PHOTO, CITY_PHOTO, DOG_VIDEO, HOLIDAY_VIDEO } from "./support/sam
 const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR ?? "test-results/screenshots";
 const MIXED_FILES = [BEACH_PHOTO, CITY_PHOTO, HOLIDAY_VIDEO, DOG_VIDEO];
 const COLOR_SCHEMES = ["light", "dark"] as const;
+const LONG_NAME = "IMG_20260712_183455_holiday_in_the_mountains_with_the_whole_family_final_edit_v3.png";
+const LONG_PHOTO = `/Users/sam/Pictures/${LONG_NAME}`;
+const LONG_ERROR = "Invalid data found when processing input. The file may be damaged or only partly downloaded.";
+const LONG_FOLDER = "/Users/sam/Library/Mobile Documents/com~apple~CloudDocs/Projects/2026/Client work/Exports";
 
 async function saveScreenshot(page: Page, stateName: string, colorScheme: string): Promise<void> {
   // Keeps the last clicked button out of its hover state.
@@ -88,6 +92,44 @@ for (const colorScheme of COLOR_SCHEMES) {
       await expect(page.getByRole("article").getByRole("heading", { level: 1 })).toBeVisible();
 
       await saveScreenshot(page, "8-help", colorScheme);
+    });
+
+    test("adding a large folder", async ({ page }) => {
+      const backend = await launchWithFiles(page, [BEACH_PHOTO], { folders: { "/Users/sam/Pictures": [CITY_PHOTO] } });
+      await backend.holdScans();
+      await backend.dropFiles(["/Users/sam/Pictures"]);
+      await expect(page.getByText("Adding files")).toBeVisible();
+
+      await saveScreenshot(page, "9-adding-files", colorScheme);
+    });
+
+    test("saving to a chosen folder", async ({ page }) => {
+      const backend = await launchWithFiles(page, [BEACH_PHOTO]);
+      await backend.answerNextDialog(LONG_FOLDER);
+      await page.getByRole("radio", { name: "Another folder" }).click();
+      await page.getByRole("complementary", { name: "Settings" }).locator("[data-slot=scroll-area-viewport]").evaluate((viewport) => {
+        viewport.scrollTop = viewport.scrollHeight;
+      });
+
+      await saveScreenshot(page, "10-save-to-folder", colorScheme);
+    });
+
+    test("smallest window with long names", async ({ page }) => {
+      await page.setViewportSize({ width: 760, height: 540 });
+      await launchWithFiles(page, [LONG_PHOTO, ...MIXED_FILES], { failingFiles: { [LONG_NAME]: LONG_ERROR } });
+      await page.getByRole("button", { name: "Convert 5 files" }).click();
+      await expect(page.getByText("1 failed")).toBeVisible();
+
+      await saveScreenshot(page, "11-smallest-window", colorScheme);
+    });
+
+    test("quitting while converting", async ({ page }) => {
+      const backend = await launchWithFiles(page, MIXED_FILES, { conversionMode: "manual" });
+      await page.getByRole("button", { name: "Convert 4 files" }).click();
+      await backend.requestWindowClose();
+      await expect(page.getByRole("alertdialog")).toBeVisible();
+
+      await saveScreenshot(page, "12-quit-dialog", colorScheme);
     });
   });
 }

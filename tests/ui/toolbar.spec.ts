@@ -120,3 +120,16 @@ for (const pageName of ["Settings", "Help"]) {
     await expect(toolbar(page).getByRole("button", { name: pageName })).toHaveAttribute("aria-pressed", "false");
   });
 }
+
+test("holding a shortcut down acts once, not on every repeat", async ({ page }) => {
+  await launchConverter(page);
+  const settingsButton = toolbar(page).getByRole("button", { name: "Settings" });
+
+  await page.keyboard.down("Meta");
+  await page.keyboard.down("Comma");
+  await page.keyboard.down("Comma");
+  await page.keyboard.up("Comma");
+  await page.keyboard.up("Meta");
+
+  await expect(settingsButton).toHaveAttribute("aria-pressed", "true");
+});

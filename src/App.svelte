@@ -4,10 +4,9 @@
   import { toast } from "svelte-sonner";
   import type { Event as TauriEvent } from "@tauri-apps/api/event";
   import { getCurrentWebview, type DragDropEvent } from "@tauri-apps/api/webview";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { open } from "@tauri-apps/plugin-dialog";
   import { Toaster } from "$lib/components/ui/sonner/index.js";
   import * as Tooltip from "$lib/components/ui/tooltip/index.js";
+  import BusyState from "$lib/components/BusyState.svelte";
   import DropOverlay from "$lib/components/DropOverlay.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
   import FileList from "$lib/components/FileList.svelte";
@@ -16,39 +15,32 @@
   import SettingsPanel from "$lib/components/SettingsPanel.svelte";
   import SettingsView from "$lib/components/SettingsView.svelte";
   import Toolbar from "$lib/components/Toolbar.svelte";
-  import {
-    cancelConversion,
-    convertFiles,
-    getCatalog,
-    inspectPaths,
-    openOutput,
-    revealOutput,
-    type ConversionCatalog,
-    type ConversionRequest,
-    type FormatOption,
-  } from "$lib/backend";
-  import { isPrimaryModifierPressed, pluralise, revealInFolderLabel } from "$lib/formatting";
-  import { PreferenceStore } from "$lib/preferences.svelte";
+  import { getCatalog, type ConversionCatalog, type FormatOption } from "$lib/backend";
+  import { ConversionRun } from "$lib/conversion-run.svelte";
+  import { openConvertedFile, revealConvertedFile } from "$lib/converted-files";
+  import { errorMessageOf, showError } from "$lib/errors";
+  import { FileAdder, WAIT_FOR_CONVERSION_MESSAGE, reportAddOutcome } from "$lib/file-adder.svelte";
+  import { pickFiles, pickFolders } from "$lib/file-pickers";
+  import { revealInFolderLabel } from "$lib/formatting";
+  import { PreferenceStore } from "$lib/preference-store.svelte";
+  import { QuitGuard } from "$lib/quit-guard.svelte";
   import { FileQueue } from "$lib/queue.svelte";
-  import { buildConversionRequests } from "$lib/requests";
+  import { UNKNOWN_PLATFORM, shortcutFor, type Shortcut } from "$lib/shortcuts";
   import type { AppView } from "$lib/views";
-
-  const MAX_NAMES_IN_TOAST = 3;
 
   const queue = new FileQueue();
   const preferenceStore = new PreferenceStore();
+  const conversionRun = new ConversionRun(queue);
+  const fileAdder = new FileAdder(queue);
+  const quitGuard = new QuitGuard(queue, conversionRun);
 
   let catalog = $state<ConversionCatalog | null>(null);
   let startupError = $state<string | null>(null);
   let hasLoadedPreferences = $state(false);
   let isDraggingFiles = $state(false);
-  let activeBatchIds = $state<string[]>([]);
-  let isCancelling = $state(false);
-  let activeRun: Promise<void> = Promise.resolve();
   let view = $state<AppView>("converter");
-  let isQuitDialogOpen = $state(false);
 
-  const platform = $derived(catalog?.platform ?? "");
+  const platform = $derived(catalog?.platform ?? UNKNOWN_PLATFORM);
   const revealLabel = $derived(revealInFolderLabel(platform));
   const imageTargetLabel = $derived(labelFor(catalog?.imageOutputs, preferenceStore.values.imageFormat));
   const videoTargetLabel = $derived(labelFor(catalog?.videoOutputs, preferenceStore.values.videoFormat));
@@ -58,29 +50,19 @@
     return label;
   }
 
-  function errorMessageOf(error: unknown): string {
-    const message = error instanceof Error ? error.message : String(error);
-    return message;
-  }
-
-  // A saved format may not exist on this machine (HEIC output is macOS only).
-  function fallBackToAvailableFormats(loadedCatalog: ConversionCatalog): void {
-    const preferences = preferenceStore.values;
-    const isImageFormatAvailable = loadedCatalog.imageOutputs.some((option) => option.id === preferences.imageFormat);
-    const isVideoFormatAvailable = loadedCatalog.videoOutputs.some((option) => option.id === preferences.videoFormat);
-
-    if (!isImageFormatAvailable && loadedCatalog.imageOutputs[0]) {
-      preferences.imageFormat = loadedCatalog.imageOutputs[0].id;
-    }
-    if (!isVideoFormatAvailable && loadedCatalog.videoOutputs[0]) {
-      preferences.videoFormat = loadedCatalog.videoOutputs[0].id;
+  // A damaged settings file shouldn't stop the app; the defaults are used instead.
+  async function loadPreferences(): Promise<void> {
+    try {
+      await preferenceStore.load();
+    } catch {
+      toast.error("Couldn't load your settings", { description: "Using the defaults for now." });
     }
   }
 
   async function initialise(): Promise<void> {
     try {
-      const [loadedCatalog] = await Promise.all([getCatalog(), preferenceStore.load()]);
-      fallBackToAvailableFormats(loadedCatalog);
+      const [loadedCatalog] = await Promise.all([getCatalog(), loadPreferences()]);
+      preferenceStore.useAvailableFormats(loadedCatalog);
       catalog = loadedCatalog;
       hasLoadedPreferences = true;
     } catch (error) {
@@ -88,37 +70,22 @@
     }
   }
 
-  function describeSkippedFiles(skippedNames: string[]): string {
-    const listedNames = skippedNames.slice(0, MAX_NAMES_IN_TOAST).join(", ");
-    const remainingCount = skippedNames.length - MAX_NAMES_IN_TOAST;
-    const remainder = remainingCount > 0 ? ` and ${remainingCount} more` : "";
-
-    const description = `${listedNames}${remainder}`;
-    return description;
-  }
-
   async function addPaths(paths: string[]): Promise<void> {
     if (paths.length === 0) {
       return;
     }
     if (queue.isConverting) {
-      toast.info("Wait for the current conversion to finish.");
+      toast.info(WAIT_FOR_CONVERSION_MESSAGE);
       return;
     }
 
+    // Shows the list straight away, so a slow folder scan shows its progress.
+    view = "converter";
     try {
-      const inspectedFiles = await inspectPaths(paths);
-      queue.startNextBatchIfFinished();
-      view = "converter";
-      const skippedNames = queue.add(inspectedFiles);
-
-      if (skippedNames.length > 0) {
-        toast.warning(`Skipped ${pluralise(skippedNames.length, "unsupported file")}`, {
-          description: describeSkippedFiles(skippedNames),
-        });
-      }
+      const outcome = await fileAdder.add(paths);
+      reportAddOutcome(outcome);
     } catch (error) {
-      toast.error("Couldn't add files", { description: errorMessageOf(error) });
+      showError("Couldn't add files", error);
     }
   }
 
@@ -127,62 +94,28 @@
       return;
     }
 
-    const supportedExtensions = [...catalog.imageInputExtensions, ...catalog.videoInputExtensions];
-    const chosenPaths = await open({
-      multiple: true,
-      title: "Choose images or videos",
-      filters: [
-        { name: "Images and videos", extensions: supportedExtensions },
-        { name: "Images", extensions: catalog.imageInputExtensions },
-        { name: "Videos", extensions: catalog.videoInputExtensions },
-      ],
-    });
-    await addPaths(chosenPaths ?? []);
+    const chosenPaths = await pickFiles(catalog);
+    await addPaths(chosenPaths);
   }
 
   async function chooseFolder(): Promise<void> {
-    const chosenPaths = await open({ directory: true, multiple: true, title: "Choose folders" });
-    await addPaths(chosenPaths ?? []);
+    const chosenPaths = await pickFolders();
+    await addPaths(chosenPaths);
+  }
+
+  async function cancelConversion(): Promise<void> {
+    try {
+      await conversionRun.cancel();
+    } catch (error) {
+      showError("Couldn't cancel the conversion", error);
+    }
   }
 
   async function startConversion(): Promise<void> {
-    if (queue.isEmpty || queue.isConverting) {
+    if (fileAdder.isAdding) {
       return;
     }
-
-    queue.prepareForRun();
-    const requests = buildConversionRequests(queue.items, $state.snapshot(preferenceStore.values));
-    activeBatchIds = requests.map((request) => request.batchId);
-
-    activeRun = Promise.all(requests.map(runBatch)).then(() => {
-      isCancelling = false;
-    });
-    await activeRun;
-  }
-
-  // Images and videos run as separate batches; a failure only affects its own.
-  async function runBatch(request: ConversionRequest): Promise<void> {
-    try {
-      await convertFiles(request, (event) => queue.applyEvent(event));
-    } catch (error) {
-      const fileIds = request.files.map((file) => file.fileId);
-      queue.markUnfinishedAsFailed(fileIds, errorMessageOf(error));
-    } finally {
-      activeBatchIds = activeBatchIds.filter((batchId) => batchId !== request.batchId);
-    }
-  }
-
-  async function cancelActiveConversion(): Promise<void> {
-    isCancelling = true;
-    await Promise.all(activeBatchIds.map((batchId) => cancelConversion(batchId)));
-  }
-
-  async function runFileAction(action: (path: string) => Promise<void>, path: string): Promise<void> {
-    try {
-      await action(path);
-    } catch (error) {
-      toast.error(errorMessageOf(error));
-    }
+    await conversionRun.start($state.snapshot(preferenceStore.values));
   }
 
   function handleDragDrop(event: TauriEvent<DragDropEvent>): void {
@@ -206,57 +139,46 @@
     view = view === target ? "converter" : target;
   }
 
+  // Number fields save on change, which a shortcut's preventDefault skips.
+  // Blurring fires that change first, so the typed value is used.
+  function commitFocusedField(): void {
+    const focusedElement = document.activeElement;
+    if (focusedElement instanceof HTMLInputElement) {
+      focusedElement.blur();
+    }
+  }
+
   function convertFromAnyView(): void {
+    commitFocusedField();
     view = "converter";
     void startConversion();
   }
 
-  // Shortcut labels per OS live in shortcutKeys (formatting.ts).
-  function shortcutActionFor(event: KeyboardEvent): (() => void) | null {
-    if (event.key === "F1") {
-      return () => toggleView("help");
-    }
-    if (!isPrimaryModifierPressed(event, platform)) {
-      return null;
-    }
-
-    const actionsByKey: Record<string, () => void> = {
-      o: () => void chooseFiles(),
-      enter: convertFromAnyView,
-      ",": () => toggleView("settings"),
-    };
-    const action = actionsByKey[event.key.toLowerCase()] ?? null;
-    return action;
-  }
+  const SHORTCUT_ACTIONS: Record<Shortcut, () => void> = {
+    open: () => void chooseFiles(),
+    convert: convertFromAnyView,
+    settings: () => toggleView("settings"),
+    help: () => toggleView("help"),
+  };
 
   function handleKeydown(event: KeyboardEvent): void {
-    const action = shortcutActionFor(event);
-    if (!action) {
+    // A held key repeats; each shortcut acts once. The quit dialog has its own keys.
+    if (event.repeat || quitGuard.isDialogOpen) {
+      return;
+    }
+
+    const shortcut = shortcutFor(event, platform);
+    if (!shortcut) {
       return;
     }
     event.preventDefault();
-    action();
-  }
-
-  // Closing mid-conversion asks first, so nothing is left half-written.
-  function guardWindowClose(event: { preventDefault: () => void }): void {
-    if (!queue.isConverting) {
-      return;
-    }
-    event.preventDefault();
-    isQuitDialogOpen = true;
-  }
-
-  async function quitAfterCancelling(): Promise<void> {
-    await cancelActiveConversion();
-    await activeRun;
-    await getCurrentWindow().destroy();
+    SHORTCUT_ACTIONS[shortcut]();
   }
 
   onMount(() => {
     void initialise();
     const stopDragDropPromise = getCurrentWebview().onDragDropEvent(handleDragDrop);
-    const stopCloseGuardPromise = getCurrentWindow().onCloseRequested(guardWindowClose);
+    const stopCloseGuardPromise = quitGuard.listen();
 
     return () => {
       void stopDragDropPromise.then((stopListening) => stopListening());
@@ -281,7 +203,7 @@
   <div class="flex h-full flex-col">
     <Toolbar
       {view}
-      isMac={platform === "macos"}
+      {platform}
       hasFiles={!queue.isEmpty}
       isConverting={queue.isConverting}
       onAddFiles={chooseFiles}
@@ -295,8 +217,12 @@
         <p class="text-destructive p-8 text-sm select-text" role="alert">Couldn't start: {startupError}</p>
       {:else if view === "help"}
         <HelpView />
+      {:else if !catalog}
+        <BusyState label="Loading" />
       {:else if catalog && view === "settings"}
         <SettingsView {catalog} bind:preferences={preferenceStore.values} isConverting={queue.isConverting} />
+      {:else if catalog && queue.isEmpty && fileAdder.isAdding}
+        <BusyState label="Adding files" />
       {:else if catalog && queue.isEmpty}
         <EmptyState
           imageExtensions={catalog.imageInputExtensions}
@@ -309,12 +235,13 @@
         <div class="grid h-full min-h-0 grid-cols-[1fr_22rem]">
           <FileList
             {queue}
+            isAdding={fileAdder.isAdding}
             {imageTargetLabel}
             {videoTargetLabel}
             {revealLabel}
             onRemove={(itemId) => queue.remove(itemId)}
-            onOpen={(path) => runFileAction(openOutput, path)}
-            onReveal={(path) => runFileAction(revealOutput, path)}
+            onOpen={openConvertedFile}
+            onReveal={revealConvertedFile}
           />
           <SettingsPanel
             {catalog}
@@ -324,11 +251,12 @@
             fileCount={queue.items.length}
             finishedCount={queue.summary.finishedCount}
             isConverting={queue.isConverting}
-            {isCancelling}
+            isAdding={fileAdder.isAdding}
+            isCancelling={conversionRun.isCancelling}
             isRerun={queue.hasFinishedRun}
             {platform}
             onConvert={startConversion}
-            onCancel={cancelActiveConversion}
+            onCancel={cancelConversion}
           />
         </div>
       {/if}
@@ -337,7 +265,7 @@
 </Tooltip.Provider>
 
 {#if isDraggingFiles}
-  <DropOverlay />
+  <DropOverlay isConverting={queue.isConverting} />
 {/if}
 
-<QuitDialog bind:open={isQuitDialogOpen} onQuit={quitAfterCancelling} />
+<QuitDialog bind:open={quitGuard.isDialogOpen} isQuitting={quitGuard.isQuitting} onQuit={() => quitGuard.quit()} />

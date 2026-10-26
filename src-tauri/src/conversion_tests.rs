@@ -1184,3 +1184,194 @@ async fn transparency_is_kept_or_flattened_onto_white() {
         );
     }
 }
+
+fn assert_transparency_kept(pixels: &RgbaImage, description: &str) {
+    let corner_alpha = pixels.get_pixel(0, 0).0[3];
+    let centre_alpha = pixels.get_pixel(60, 40).0[3];
+    assert!(
+        corner_alpha < 5,
+        "{description}: corner alpha {corner_alpha}"
+    );
+    assert!(
+        (100..=220).contains(&centre_alpha),
+        "{description}: centre alpha {centre_alpha}"
+    );
+}
+
+// FFmpeg reads an AVIF's alpha as a second stream, which a plain decode drops.
+#[tokio::test(flavor = "multi_thread")]
+async fn transparent_avif_inputs_keep_their_transparency() {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let directory = tempfile::tempdir().unwrap();
+    let png_path = directory.path().join("transparent.png");
+    write_transparent_png(&png_path);
+    let avif_path = convert_image_to(
+        &png_path,
+        ImageFormat::Avif,
+        ResizeOption::Original,
+        directory.path(),
+    )
+    .await
+    .unwrap();
+
+    for format in [ImageFormat::Png, ImageFormat::Webp, ImageFormat::Avif] {
+        let output_path =
+            convert_image_to(&avif_path, format, ResizeOption::Original, directory.path())
+                .await
+                .unwrap();
+        let pixels = converted_pixels(&ffmpeg, &output_path, format).await;
+        assert_transparency_kept(&pixels, &format!("AVIF to {format:?}"));
+    }
+
+    let jpeg_path = convert_image_to(
+        &avif_path,
+        ImageFormat::Jpg,
+        ResizeOption::Original,
+        directory.path(),
+    )
+    .await
+    .unwrap();
+    let [red, green, blue, _] = image::open(&jpeg_path)
+        .unwrap()
+        .to_rgba8()
+        .get_pixel(0, 0)
+        .0;
+    assert!(
+        red > 250 && green > 250 && blue > 250,
+        "AVIF to JPG corner is {:?}",
+        [red, green, blue]
+    );
+}
+
+// The red block is opaque and the rest half transparent, so the alpha has to
+// turn with the colour.
+#[tokio::test(flavor = "multi_thread")]
+async fn transparent_avif_alpha_turns_with_the_image() {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let directory = tempfile::tempdir().unwrap();
+    let png_path = directory.path().join("corner.png");
+    write_corner_marked_png(&png_path, true);
+    let avif_path = directory.path().join("corner.avif");
+    write_avif(&ffmpeg, &png_path, &avif_path, true).await;
+    let avif_bytes = std::fs::read(&avif_path).unwrap();
+
+    for (index, (transforms, expected_size, expected_corner)) in
+        ORIENTATION_CASES.into_iter().enumerate()
+    {
+        let oriented_path = directory.path().join(format!("oriented-{index}.avif"));
+        std::fs::write(&oriented_path, with_transforms(&avif_bytes, transforms)).unwrap();
+        let output_path = convert_image_to(
+            &oriented_path,
+            ImageFormat::Png,
+            ResizeOption::Original,
+            directory.path(),
+        )
+        .await
+        .unwrap();
+
+        let output_image = image::open(&output_path).unwrap().to_rgba8();
+        let (width, height) = output_image.dimensions();
+        let corner_alpha = match red_corner(&output_image) {
+            "top left" => output_image.get_pixel(1, 1).0[3],
+            "top right" => output_image.get_pixel(width - 2, 1).0[3],
+            "bottom left" => output_image.get_pixel(1, height - 2).0[3],
+            _ => output_image.get_pixel(width - 2, height - 2).0[3],
+        };
+        let centre_alpha = output_image.get_pixel(width / 2, height / 2).0[3];
+
+        assert_eq!(
+            ((width, height), red_corner(&output_image)),
+            (expected_size, expected_corner),
+            "{transforms:?}"
+        );
+        assert!(
+            corner_alpha > 240,
+            "{transforms:?}: red block alpha {corner_alpha}"
+        );
+        assert!(
+            (100..=160).contains(&centre_alpha),
+            "{transforms:?}: background alpha {centre_alpha}"
+        );
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn convert_with_sips(png_path: &Path, heic_path: &Path) {
+    let sips_status = std::process::Command::new("/usr/bin/sips")
+        .args(["-s", "format", "heic"])
+        .arg(png_path)
+        .arg("--out")
+        .arg(heic_path)
+        .output()
+        .unwrap()
+        .status;
+    assert!(sips_status.success());
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test(flavor = "multi_thread")]
+async fn transparent_heic_inputs_keep_their_transparency() {
+    let directory = tempfile::tempdir().unwrap();
+    let png_path = directory.path().join("transparent.png");
+    write_transparent_png(&png_path);
+    let heic_path = directory.path().join("transparent.heic");
+    convert_with_sips(&png_path, &heic_path);
+
+    let output_path = convert_image_to(
+        &heic_path,
+        ImageFormat::Png,
+        ResizeOption::Original,
+        directory.path(),
+    )
+    .await
+    .unwrap();
+
+    let pixels = image::open(&output_path).unwrap().to_rgba8();
+    assert_transparency_kept(&pixels, "HEIC to PNG");
+}
+
+// macOS stores large HEIC images as a grid of 512 × 512 tiles, and the alpha
+// as a second grid. Both have to come back whole.
+#[cfg(target_os = "macos")]
+#[tokio::test(flavor = "multi_thread")]
+async fn gridded_heic_inputs_decode_at_full_size() {
+    let ffmpeg = Ffmpeg::from_downloaded_binary();
+    let directory = tempfile::tempdir().unwrap();
+
+    for is_transparent in [false, true] {
+        let alpha = if is_transparent { 128 } else { 255 };
+        let png_path = directory.path().join(format!("large-{is_transparent}.png"));
+        RgbaImage::from_fn(1600, 1200, |x, _| {
+            let red = u8::try_from(x % 256).unwrap();
+            Rgba([red, 90, 160, alpha])
+        })
+        .save(&png_path)
+        .unwrap();
+        let heic_path = directory
+            .path()
+            .join(format!("large-{is_transparent}.heic"));
+        convert_with_sips(&png_path, &heic_path);
+        let tile_grids = ffmpeg
+            .stream_group_ids(&heic_path, &CancellationToken::new())
+            .await
+            .unwrap();
+        assert!(!tile_grids.is_empty(), "sips didn't make a tiled HEIC");
+
+        let output_path = convert_image_to(
+            &heic_path,
+            ImageFormat::Png,
+            ResizeOption::Original,
+            directory.path(),
+        )
+        .await
+        .unwrap();
+
+        let output_image = image::open(&output_path).unwrap().to_rgba8();
+        assert_eq!(output_image.dimensions(), (1600, 1200));
+        let far_corner_alpha = output_image.get_pixel(1599, 1199).0[3];
+        assert!(
+            far_corner_alpha.abs_diff(alpha) <= 2,
+            "transparent {is_transparent}: alpha {far_corner_alpha}"
+        );
+    }
+}

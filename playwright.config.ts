@@ -2,8 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 const isCi = Boolean(process.env.CI);
 
-// Not the app's own dev port (1420), so `pnpm dev` can keep running alongside.
-const UI_TEST_PORT = 1430;
+// Not the app's own dev port (1420), so `pnpm dev` can keep running alongside. Set
+// UI_TEST_PORT to run the tests of two checkouts at once; otherwise one reuses the other's server.
+const UI_TEST_PORT = Number(process.env.UI_TEST_PORT ?? 1430);
 const baseUrl = `http://localhost:${UI_TEST_PORT}`;
 
 // The same size as the app's main window (src-tauri/src/lib.rs).
