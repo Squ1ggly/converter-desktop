@@ -48,8 +48,13 @@ of using up the computer's memory.
 
 ## Transparency
 
-PNG, WebP, AVIF and TIFF keep transparent areas. JPG, BMP and PDF can't store transparency, so
-transparent areas become white, as they would in an image editor.
+Transparent areas of the original are kept, including in HEIC, HEIF and AVIF files, as long as
+the output format can store them:
+
+- PNG, WebP, AVIF and TIFF keep transparent and partly transparent areas.
+- GIF keeps them, but each pixel is either fully transparent or fully opaque.
+- JPG, BMP and PDF can't store transparency, so transparent areas become white, as they would in
+  an image editor.
 
 ## Colour
 
@@ -76,6 +81,7 @@ mirroring settings or their EXIF tag. The converted file is upright without rely
   than photos. Images larger than 2000 pixels on either side are shrunk to fit 2000 × 2000 before
   tracing.
 - **GIF and WebP input**: for animated files, only the first frame is converted.
-- **HEIC, HEIF and AVIF input** are read with the bundled FFmpeg.
+- **HEIC, HEIF and AVIF input** are read with the bundled FFmpeg, including their transparency and
+  large images stored as tiles.
 - **Misnamed files**: if a file can't be read as the format its extension says (for example an
   iPhone HEIC renamed to `.jpg`), the app tries FFmpeg before reporting an error.

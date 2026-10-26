@@ -64,6 +64,36 @@ impl Ffmpeg {
         Ffmpeg { binary_path }
     }
 
+    // FFmpeg numbers stream groups, such as HEIC tile grids, in its own order.
+    // Its summary of the input gives each group's container id, for example
+    // "  Stream group #0:1[0x1a]: Tile Grid: hevc ...". Returns (index, id).
+    pub async fn stream_group_ids(
+        &self,
+        input_path: &Path,
+        cancellation: &CancellationToken,
+    ) -> ConversionResult<Vec<(usize, u32)>> {
+        let mut command = Command::new(&self.binary_path);
+        command
+            .args(["-hide_banner", "-nostdin", "-i"])
+            .arg(input_path)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        hide_console_window(&mut command);
+
+        let child = command.spawn()?;
+        child_lifetime::end_with_app(&child);
+        // Without an output file FFmpeg exits with an error after the summary.
+        let output = tokio::select! {
+            output = child.wait_with_output() => output?,
+            () = cancellation.cancelled() => return Err(ConversionError::Cancelled),
+        };
+        let summary = String::from_utf8_lossy(&output.stderr);
+        let group_ids = summary.lines().filter_map(parse_stream_group_id).collect();
+        Ok(group_ids)
+    }
+
     // Reports 0–99% progress when the input has a known duration.
     // Cancelling kills the process and waits for it to exit.
     pub async fn run(
@@ -189,6 +219,18 @@ async fn collect_stderr(
 
     let kept_lines = Vec::from(recent_lines);
     kept_lines
+}
+
+// "  Stream group #0:1[0x1a]: Tile Grid: ..." gives (1, 26).
+fn parse_stream_group_id(line: &str) -> Option<(usize, u32)> {
+    let after_label = line.trim_start().strip_prefix("Stream group #0:")?;
+    let (group_index, rest) = after_label.split_once("[0x")?;
+    let (group_id, _) = rest.split_once(']')?;
+    let group_index_and_id = (
+        group_index.parse().ok()?,
+        u32::from_str_radix(group_id, 16).ok()?,
+    );
+    Some(group_index_and_id)
 }
 
 fn record_duration_if_present(line: &str, total_duration_microseconds: &AtomicU64) {
@@ -348,6 +390,17 @@ mod tests {
         );
         assert_eq!(parse_progress_percent("out_time_us=5000000", 0), None);
         assert_eq!(parse_progress_percent("frame=12", 10_000_000), None);
+    }
+
+    #[test]
+    fn reads_stream_group_ids_from_the_input_summary() {
+        let tile_grid_line =
+            "  Stream group #0:1[0x1a]: Tile Grid: hevc (Rext), gray(pc), 1600x1200";
+        assert_eq!(parse_stream_group_id(tile_grid_line), Some((1, 26)));
+        assert_eq!(
+            parse_stream_group_id("  Stream #0:0[0x1]: Video: hevc, 64x32"),
+            None
+        );
     }
 
     #[test]
