@@ -76,7 +76,6 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_catalog,
-            commands::inspect_paths,
             commands::inspect_input_paths,
             commands::convert_files,
             commands::cancel_conversion,

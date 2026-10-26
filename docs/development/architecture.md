@@ -14,13 +14,12 @@ sidecar.
    classifies each file as an image, a video or unsupported. Symlinked folders inside a folder
    are skipped, and it stops after 10,000 files, returning `isFileLimitReached: true`. Image
    files are added to the asset protocol scope so the UI can show thumbnails. Nothing else is
-   readable by the webview. `inspect_paths` returns the same files without the flag, for the
-   UI until it moves to `inspect_input_paths`.
+   readable by the webview.
 3. **Convert** sends one `convert_files` request per kind (one for images, one for videos), each
    with its own settings. Both run at the same time.
-4. Each request is a batch. Images run in parallel, up to four at once or one per core if there are fewer. Videos run one at a time.
-   Progress and results come back to the UI through a Tauri channel as `started`, `progress`,
-   `completed`, `failed` and `cancelled` events.
+4. Each request is a batch. Images run in parallel, up to four at once or one per core if there
+   are fewer. Videos run one at a time. Progress and results come back to the UI through a Tauri
+   channel as `started`, `progress`, `completed`, `failed` and `cancelled` events.
 5. `cancel_conversion` cancels a batch's token, even if it arrives before the batch has started.
    Waiting files are marked cancelled, and running FFmpeg processes are killed and waited for, so
    their files can be deleted on Windows too.
@@ -51,8 +50,9 @@ it never stops the app from starting.
 Videos are converted by one FFmpeg run each. `video_conversion.rs` builds the arguments: the codec
 and quality preset per container, a scale filter that only shrinks, the frame rate, and a
 per-clip palette for GIF. GIF takes two FFmpeg runs: the first writes the palette to the scratch
-folder, the second applies it. Doing both in one run makes FFmpeg hold every frame in memory. `ffmpeg.rs` runs the process, reads progress from `-progress pipe:1`,
-and picks the most relevant stderr line as the error message.
+folder, the second applies it. Doing both in one run makes FFmpeg hold every frame in memory.
+`ffmpeg.rs` runs the process, reads progress from `-progress pipe:1`, and picks the most relevant
+stderr line as the error message.
 
 ## Module map
 
@@ -95,7 +95,8 @@ scripts/fetch-ffmpeg.ts      Downloads the pinned, checksummed FFmpeg for a plat
 ## FFmpeg
 
 `scripts/fetch-ffmpeg.ts` downloads FFmpeg 9.0.2 for one target into
-`src-tauri/binaries/converter-ffmpeg-<target triple>`. Each download is pinned to an exact URL and SHA-256.
+`src-tauri/binaries/converter-ffmpeg-<target triple>` (with `.exe` on Windows). Each download is
+pinned to an exact URL and SHA-256.
 
 | Platform | Source |
 |---|---|
