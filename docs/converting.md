@@ -21,13 +21,19 @@ Click **Cancel**. The button shows "Cancelling" until every file has stopped.
 
 - Files that haven't started are marked **Cancelled**.
 - Video conversions in progress are stopped, and their partly written files are deleted.
-- Quitting during a conversion asks first. See [Troubleshooting](troubleshooting.md).
 - An image that is already being converted may still finish.
+
+## Closing while converting
+
+Closing the window during a conversion asks "Quit while converting?" first. On macOS, so does
+⌘Q or **Quit Converter** in the app menu. **Keep converting** carries on. **Quit** shows
+"Quitting" while it cancels the files still converting, then closes the window. Their unfinished
+output is removed. For quitting in other ways, see [Troubleshooting](troubleshooting.md).
 
 ## Results
 
 When every file has finished, the heading shows how many converted, plus how many failed or were
-cancelled.
+cancelled. If none converted, the heading shows how many failed, for example "3 failed".
 
 | Action | Where | What it does |
 |---|---|---|

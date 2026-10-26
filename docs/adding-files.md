@@ -3,12 +3,12 @@
 There are three ways to add files:
 
 - Drag files or folders onto the window. "Drop to add" appears while you drag.
-- Click **Choose files** (⌘O on macOS, Ctrl+O on Windows and Linux). The picker can filter to
+- Click **Add files** (⌘O on macOS, Ctrl+O on Windows and Linux). The picker can filter to
   images, videos or both.
-- Click **Choose folder** to add one or more folders.
+- Click **Add folder** to add one or more folders.
 
-Once the list has files in it, the toolbar shows **Add files** (the same file picker) and
-**Clear**, which empties the list. Dragging and dropping keeps working at any time.
+Once the list has files in it, **Add files** moves to the toolbar, next to **Clear**, which empties
+the list. Dragging and dropping keeps working at any time.
 
 One list can hold images and videos together. They are shown in separate groups, each with its
 own settings. See [Images](images.md) and [Videos](videos.md).
@@ -31,18 +31,25 @@ Folders are searched recursively, including every subfolder. Inside a folder:
 - Images and videos are added.
 - Other files are skipped without a message.
 - Hidden files and folders (names starting with `.`) are skipped.
+- Symlinked folders are skipped. A symlinked file is added as the file it points to.
+- Adding stops after 10,000 files, so a whole drive or home folder can't be added by mistake. The
+  app shows "Only the first 10,000 files were added". Add the rest from smaller folders.
+
+A large folder can take a moment to search. The list shows "Adding files" until it's done, and
+converting waits until then.
 
 ## Skipped files
 
 - **Unsupported files** you drop or pick directly are skipped, and a "Skipped N unsupported files"
   message names up to three of them.
 - **Duplicates**: a file that is already in the list is not added again.
-- **During a conversion** nothing can be added. Dropping files shows "Wait for the current
-  conversion to finish."
+- **During a conversion** nothing can be added. Dragging files over the window shows "Wait for
+  the conversion to finish" instead of "Drop to add".
 
 ## Removing files
 
-Before converting, click the × button (**Remove**) next to a file to take it out of the list.
+Click the × button (**Remove**) next to a file to take it out of the list. It's there before and
+after a conversion, for converted, failed and cancelled files too, but not while files convert.
 
 Adding files after a conversion has finished starts a new list: files that converted
 successfully are removed, and files that failed or were cancelled stay so you can try them again.

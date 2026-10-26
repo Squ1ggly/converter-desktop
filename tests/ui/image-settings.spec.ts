@@ -120,3 +120,53 @@ test("the selected size and the selected format look the same", async ({ page })
   const sizeBackground = await selectedSize.evaluate((element) => getComputedStyle(element).backgroundColor);
   expect(sizeBackground).toBe(formatBackground);
 });
+
+test("the convert shortcut uses a Scale value that is still being typed", async ({ page }) => {
+  const backend = await launchWithFiles(page, [BEACH_PHOTO]);
+  await imageSettings(page).getByRole("radio", { name: "Scale" }).click();
+
+  await imageSettings(page).getByRole("spinbutton", { name: "Scale" }).fill("25");
+  await page.keyboard.press("Meta+Enter");
+
+  await expect(page.getByRole("heading", { name: "1 file converted" })).toBeVisible();
+  const { conversionRequests } = await backend.readLog();
+  expect(conversionRequests[0]?.settings).toMatchObject({ options: { resize: { mode: "percent", percent: 25 } } });
+});
+
+test("the convert shortcut uses a Fit width that is still being typed", async ({ page }) => {
+  const backend = await launchWithFiles(page, [BEACH_PHOTO]);
+  await imageSettings(page).getByRole("radio", { name: "Fit" }).click();
+
+  await imageSettings(page).getByRole("spinbutton", { name: "Max width" }).fill("640");
+  await page.keyboard.press("Meta+Enter");
+
+  await expect(page.getByRole("heading", { name: "1 file converted" })).toBeVisible();
+  const { conversionRequests } = await backend.readLog();
+  expect(conversionRequests[0]?.settings).toMatchObject({ options: { resize: { mode: "fit", maxWidth: 640 } } });
+});
+
+test("the format and size toggles share one style", async ({ page }) => {
+  await launchWithFiles(page, [BEACH_PHOTO]);
+
+  const formatBox = await imageSettings(page).getByRole("radio", { name: "PNG" }).boundingBox();
+  const sizeBox = await imageSettings(page).getByRole("radio", { name: "Scale" }).boundingBox();
+  const spacings = await imageSettings(page)
+    .locator("[data-slot=toggle-group]")
+    .evaluateAll((groups) => groups.map((group) => group.getAttribute("data-spacing")));
+
+  expect(sizeBox?.height).toBe(formatBox?.height);
+  expect(spacings).toHaveLength(2);
+  expect(new Set(spacings).size).toBe(1);
+});
+
+test("a one-line format description leaves no gap above Quality", async ({ page }) => {
+  await launchWithFiles(page, [BEACH_PHOTO]);
+
+  const description = imageSettings(page).getByText("Photos. Opens anywhere. No transparency.");
+  const { height, lineHeight } = await description.evaluate((element) => ({
+    height: element.getBoundingClientRect().height,
+    lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
+  }));
+
+  expect(height).toBeLessThan(lineHeight * 1.5);
+});

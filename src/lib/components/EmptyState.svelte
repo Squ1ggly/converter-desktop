@@ -1,6 +1,7 @@
 <script lang="ts">
   import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
   import ImagePlusIcon from "@lucide/svelte/icons/image-plus";
+  import PlusIcon from "@lucide/svelte/icons/plus";
   import { Button } from "$lib/components/ui/button/index.js";
   import * as Empty from "$lib/components/ui/empty/index.js";
   import ShortcutHint from "./ShortcutHint.svelte";
@@ -32,17 +33,18 @@
         <ImagePlusIcon />
       </Empty.Media>
       <Empty.Title>Drop images or videos</Empty.Title>
-      <Empty.Description>Or choose files. Folders work too.</Empty.Description>
+      <Empty.Description>Or add them here. Folders work too.</Empty.Description>
     </Empty.Header>
     <Empty.Content>
       <div class="flex gap-2">
         <Button onclick={onChooseFiles}>
-          Choose files
+          <PlusIcon />
+          Add files
           <ShortcutHint shortcut="open" {platform} />
         </Button>
         <Button variant="outline" onclick={onChooseFolder}>
           <FolderOpenIcon />
-          Choose folder
+          Add folder
         </Button>
       </div>
       <dl class="text-muted-foreground mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-left text-xs">

@@ -67,3 +67,105 @@ test("closing the window after a finished run just closes it", async ({ page }) 
   await expect.poll(async () => (await backend.readLog()).windowDestroys).toHaveLength(1);
   await expect(page.getByRole("alertdialog")).toBeHidden();
 });
+
+test("shortcuts do nothing while the quit dialog is open", async ({ page }) => {
+  const backend = await startConvertingTwoBatches(page);
+  await backend.requestWindowClose();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+
+  await page.keyboard.press("Meta+Comma");
+  await page.keyboard.press("F1");
+  await page.keyboard.press("Meta+O");
+
+  await expect(page.getByRole("banner").getByRole("button", { name: "Settings" })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("banner").getByRole("button", { name: "Help" })).toHaveAttribute("aria-pressed", "false");
+  const { dialogs } = await backend.readLog();
+  expect(dialogs).toEqual([]);
+});
+
+test("after Quit the dialog shows Quitting, and clicking twice quits once", async ({ page }) => {
+  const backend = await startConvertingTwoBatches(page);
+  await backend.requestWindowClose();
+
+  await page.getByRole("button", { name: "Quit", exact: true }).dblclick();
+
+  const quitDialog = page.getByRole("alertdialog");
+  await expect(quitDialog.getByRole("button", { name: "Quitting" })).toBeDisabled();
+  await expect(quitDialog.getByRole("button", { name: "Keep converting" })).toBeDisabled();
+  await expect.poll(async () => (await backend.readLog()).windowDestroys).toHaveLength(1);
+  const { cancelledBatchIds } = await backend.readLog();
+  expect(cancelledBatchIds).toHaveLength(2);
+});
+
+test("Quit still closes the window if cancelling fails", async ({ page }) => {
+  const backend = await launchWithFiles(page, [BEACH_PHOTO], {
+    conversionMode: "manual",
+    failingCommands: { cancel_conversion: "The conversion has already ended" },
+  });
+  await page.getByRole("button", { name: "Convert 1 file" }).click();
+  await backend.requestWindowClose();
+
+  await page.getByRole("button", { name: "Quit", exact: true }).click();
+
+  await expect.poll(async () => (await backend.readLog()).windowDestroys).toHaveLength(1);
+});
+
+test("a window that can't close says so and offers Quit again", async ({ page }) => {
+  await launchWithFiles(page, [BEACH_PHOTO], {
+    conversionMode: "manual",
+    failingCommands: { "plugin:window|destroy": "The window is busy" },
+  });
+  await page.getByRole("button", { name: "Convert 1 file" }).click();
+  await page.evaluate(() => window.converterMockBackend.requestWindowClose());
+
+  await page.getByRole("button", { name: "Quit", exact: true }).click();
+
+  const toast = page.getByRole("listitem").filter({ hasText: "Couldn't quit" });
+  await expect(toast).toContainText("The window is busy");
+  await expect(page.getByRole("button", { name: "Quit", exact: true })).toBeEnabled();
+});
+
+test("quitting from the menu while converting asks first", async ({ page }) => {
+  const backend = await startConvertingTwoBatches(page);
+
+  await backend.requestQuitFromMenu();
+
+  await expect(page.getByRole("alertdialog", { name: "Quit while converting?" })).toBeVisible();
+  const { windowDestroys, cancelledBatchIds } = await backend.readLog();
+  expect(windowDestroys).toEqual([]);
+  expect(cancelledBatchIds).toEqual([]);
+});
+
+test("confirming a quit from the menu cancels every batch, then closes the window", async ({ page }) => {
+  const backend = await startConvertingTwoBatches(page);
+  await backend.requestQuitFromMenu();
+
+  await page.getByRole("button", { name: "Quit", exact: true }).click();
+
+  await expect.poll(async () => (await backend.readLog()).windowDestroys).toEqual([{ runningBatchCount: 0 }]);
+  const { cancelledBatchIds } = await backend.readLog();
+  expect(cancelledBatchIds).toHaveLength(2);
+});
+
+test("Keep converting after a quit from the menu carries on", async ({ page }) => {
+  const backend = await startConvertingTwoBatches(page);
+  await backend.requestQuitFromMenu();
+
+  await page.getByRole("button", { name: "Keep converting" }).click();
+
+  await expect(page.getByRole("alertdialog")).toBeHidden();
+  await expect(page.getByText("Converting 1 of 2")).toBeVisible();
+  const { windowDestroys } = await backend.readLog();
+  expect(windowDestroys).toEqual([]);
+});
+
+test("a quit from the menu that arrives after the run ended quits straight away", async ({ page }) => {
+  const backend = await launchWithFiles(page, [BEACH_PHOTO]);
+  await page.getByRole("button", { name: "Convert 1 file" }).click();
+  await expect(page.getByRole("heading", { name: "1 file converted" })).toBeVisible();
+
+  await backend.requestQuitFromMenu();
+
+  await expect.poll(async () => (await backend.readLog()).windowDestroys).toHaveLength(1);
+  await expect(page.getByRole("alertdialog")).toBeHidden();
+});

@@ -3,6 +3,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { Button } from "$lib/components/ui/button/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
+  import { showError } from "$lib/errors";
   import { GUIDE_PAGES, resolveGuideLink } from "$lib/guide";
 
   let currentSlug = $state(GUIDE_PAGES[0]?.slug ?? "");
@@ -35,17 +36,16 @@
       void showPage(destination.slug, destination.anchor);
       return;
     }
-    void openUrl(destination.url);
+    void openInBrowser(destination.url);
   }
 
-  // Delegated so links inside the rendered Markdown are handled too.
-  $effect(() => {
-    if (!article) {
-      return;
+  async function openInBrowser(url: string): Promise<void> {
+    try {
+      await openUrl(url);
+    } catch (error) {
+      showError("Couldn't open the link", error);
     }
-    article.addEventListener("click", handleLinkClick);
-    return () => article?.removeEventListener("click", handleLinkClick);
-  });
+  }
 </script>
 
 <div class="grid h-full min-h-0 grid-cols-[13rem_1fr]">
@@ -64,8 +64,11 @@
   </nav>
 
   <ScrollArea class="min-h-0">
-    <!-- Bundled from docs/ at build time, so the HTML is trusted. -->
-    <article bind:this={article} class="prose prose-sm prose-neutral dark:prose-invert prose-code:before:content-none prose-code:after:content-none prose-h1:text-2xl prose-h1:font-semibold max-w-2xl scroll-mt-4 px-8 py-6 select-text">
+    <!-- Bundled from docs/ at build time, so the HTML is trusted. Clicks are
+         handled here so links inside the rendered Markdown navigate in-app. -->
+    <!-- Links fire click on Enter too, so no key handler is needed. -->
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+    <article bind:this={article} onclick={handleLinkClick} class="prose prose-sm prose-neutral dark:prose-invert prose-code:before:content-none prose-code:after:content-none prose-h1:text-2xl prose-h1:font-semibold max-w-2xl scroll-mt-4 px-8 py-6 select-text">
       {@html currentPage?.html ?? ""}
     </article>
   </ScrollArea>

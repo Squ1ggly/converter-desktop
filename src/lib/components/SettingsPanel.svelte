@@ -2,7 +2,7 @@
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import { Separator } from "$lib/components/ui/separator/index.js";
   import type { ConversionCatalog } from "$lib/backend";
-  import type { Preferences } from "$lib/preferences.svelte";
+  import type { Preferences } from "$lib/preferences";
   import ConvertFooter from "./ConvertFooter.svelte";
   import ImageSettings from "./ImageSettings.svelte";
   import SaveLocation from "./SaveLocation.svelte";
@@ -16,6 +16,7 @@
     fileCount: number;
     finishedCount: number;
     isConverting: boolean;
+    isAdding: boolean;
     isCancelling: boolean;
     isRerun: boolean;
     platform: string;
@@ -31,16 +32,28 @@
     fileCount,
     finishedCount,
     isConverting,
+    isAdding,
     isCancelling,
     isRerun,
     platform,
     onConvert,
     onCancel,
   }: Props = $props();
+
+  let scrollViewport = $state<HTMLElement | null>(null);
+
+  // While converting every control is disabled, so the panel itself takes
+  // focus to let keyboard users scroll through the locked settings.
+  $effect(() => {
+    if (!scrollViewport) {
+      return;
+    }
+    scrollViewport.tabIndex = isConverting ? 0 : -1;
+  });
 </script>
 
 <aside class="bg-muted/30 flex min-h-0 flex-col border-l" aria-label="Settings">
-  <ScrollArea class="min-h-0 flex-1">
+  <ScrollArea class="min-h-0 flex-1" bind:viewportRef={scrollViewport}>
     <!-- A disabled fieldset locks every control while files convert. -->
     <fieldset class="flex min-w-0 flex-col gap-6 p-5" disabled={isConverting}>
       {#if hasImages}
@@ -61,5 +74,5 @@
     </fieldset>
   </ScrollArea>
 
-  <ConvertFooter {fileCount} {finishedCount} {isConverting} {isCancelling} {isRerun} {platform} {onConvert} {onCancel} />
+  <ConvertFooter {fileCount} {finishedCount} {isConverting} {isAdding} {isCancelling} {isRerun} {platform} {onConvert} {onCancel} />
 </aside>

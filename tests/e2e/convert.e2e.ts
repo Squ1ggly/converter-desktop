@@ -80,7 +80,7 @@ describe("Converter", () => {
     await dropFiles([sampleMedia.brokenVideoPath]);
 
     await $("button*=Convert 1 file").click();
-    await expect($("h2=0 files converted")).toBeDisplayed({ wait: CONVERSION_TIMEOUT_MS });
+    await expect($("h2=1 failed")).toBeDisplayed({ wait: CONVERSION_TIMEOUT_MS });
 
     await expect($("span*=Failed")).toBeDisplayed();
     await expect($('[role="alert"]')).toBeDisplayed();

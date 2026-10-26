@@ -2,7 +2,7 @@
   import * as Field from "$lib/components/ui/field/index.js";
   import * as ToggleGroup from "$lib/components/ui/toggle-group/index.js";
   import type { FormatOption } from "$lib/backend";
-  import { SELECTED_TOGGLE_CLASS } from "$lib/styles";
+  import { SELECTED_TOGGLE_CLASS, TOGGLE_GROUP_STYLE } from "$lib/styles";
 
   interface Props {
     label: string;
@@ -27,9 +27,7 @@
   <Field.Legend variant="label">{label}</Field.Legend>
   <ToggleGroup.Root
     type="single"
-    variant="outline"
-    size="sm"
-    spacing={1}
+    {...TOGGLE_GROUP_STYLE}
     class="grid w-full grid-cols-4"
     {value}
     onValueChange={selectFormat}
@@ -45,5 +43,5 @@
       </ToggleGroup.Item>
     {/each}
   </ToggleGroup.Root>
-  <Field.Description class="min-h-10">{selectedOption?.description}</Field.Description>
+  <Field.Description>{selectedOption?.description}</Field.Description>
 </Field.Set>

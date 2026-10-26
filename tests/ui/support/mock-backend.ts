@@ -5,8 +5,14 @@ import type { Channel, InvokeArgs } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
-import type { ConversionEvent, ConversionRequest, InspectedFile, MediaKind } from "$lib/backend";
-import type { Preferences } from "$lib/preferences.svelte";
+import type {
+  ConversionCatalog,
+  ConversionEvent,
+  ConversionRequest,
+  InspectedFile,
+  MediaKind,
+  PathInspection,
+} from "$lib/backend";
 import { buildCatalog, classifyFileName } from "./catalog";
 import type {
   BackendLog,
@@ -14,6 +20,7 @@ import type {
   FileConversionEvent,
   MockBackendControls,
   MockScenario,
+  SavedSettings,
 } from "./scenario";
 
 // How Rust delivers channel messages: numbered, then an end marker.
@@ -42,6 +49,9 @@ interface ActiveBatch {
 type DialogResult = string[] | string | null;
 
 const CLOSE_REQUESTED_EVENT = "tauri://close-requested";
+const QUIT_REQUESTED_EVENT = "quit-requested";
+// Like the backend, one add stops at this many files (MAX_INSPECTED_FILES in input_files.rs).
+const MAX_INSPECTED_FILES = 10_000;
 const DRAG_EVENT_NAMES: Record<DragEventType, string> = {
   enter: "tauri://drag-enter",
   drop: "tauri://drag-drop",
@@ -66,6 +76,12 @@ function readScenario(): MockScenario {
 
 const scenario = readScenario();
 const pendingDialogResults: DialogResult[] = [];
+const heldScans: (() => void)[] = [];
+let isHoldingScans = false;
+let releaseHeldCatalog: () => void = () => {};
+const catalogReleased = new Promise<void>((resolve) => {
+  releaseHeldCatalog = resolve;
+});
 const activeBatches: ActiveBatch[] = [];
 const backendLog: BackendLog = {
   dialogs: [],
@@ -113,9 +129,37 @@ function inspectFile(path: string): InspectedFile {
   return inspectedFile;
 }
 
-function inspectPaths(paths: string[]): InspectedFile[] {
-  const inspectedFiles = paths.flatMap(expandFolder).map(inspectFile);
-  return inspectedFiles;
+function inspectPaths(paths: string[]): PathInspection {
+  const foundPaths = paths.flatMap(expandFolder);
+  const inspection: PathInspection = {
+    files: foundPaths.slice(0, MAX_INSPECTED_FILES).map(inspectFile),
+    isFileLimitReached: foundPaths.length > MAX_INSPECTED_FILES,
+  };
+  return inspection;
+}
+
+function inspectPathsWhenReleased(paths: string[]): PathInspection | Promise<PathInspection> {
+  if (!isHoldingScans) {
+    return inspectPaths(paths);
+  }
+
+  const scanFinished = new Promise<PathInspection>((resolve) => heldScans.push(() => resolve(inspectPaths(paths))));
+  return scanFinished;
+}
+
+function releaseScans(): void {
+  isHoldingScans = false;
+  for (const finishScan of heldScans.splice(0)) {
+    finishScan();
+  }
+}
+
+async function getCatalog(): Promise<ConversionCatalog> {
+  if (scenario.holdsCatalog) {
+    await catalogReleased;
+  }
+  const catalog = buildCatalog(scenario.platform);
+  return catalog;
 }
 
 function outputPathFor(inputPath: string, request: ConversionRequest): string {
@@ -140,15 +184,23 @@ function finishBatch(batch: ActiveBatch): void {
   batch.resolve();
 }
 
-// Rust returns errors as plain strings, so the promise rejects with one.
-function failBatch(kind: MediaKind, message: string): void {
+function findBatch(kind: MediaKind): ActiveBatch {
   const batch = activeBatches.find((activeBatch) => activeBatch.request.settings.kind === kind);
   if (!batch) {
     throw new Error(`No ${kind} batch is converting`);
   }
+  return batch;
+}
 
+// Rust returns errors as plain strings, so the promise rejects with one.
+function failBatch(kind: MediaKind, message: string): void {
+  const batch = findBatch(kind);
   endBatch(batch);
   batch.reject(message);
+}
+
+function endBatchEarly(kind: MediaKind): void {
+  finishBatch(findBatch(kind));
 }
 
 // convert_files resolves once every file in its batch has finished, as in Rust.
@@ -249,11 +301,11 @@ function openDialog(options: OpenDialogOptions): DialogResult {
   return dialogResult;
 }
 
-function storeValue(value: Partial<Preferences>): void {
+function storeValue(value: SavedSettings): void {
   backendLog.storedPreferences = value;
 }
 
-function readStoredPreferences(): [Partial<Preferences> | null, boolean] {
+function readStoredPreferences(): [SavedSettings | null, boolean] {
   const storedPreferences = backendLog.storedPreferences;
   return [storedPreferences, storedPreferences !== null];
 }
@@ -268,8 +320,8 @@ function argumentsAs<CommandArguments>(payload: InvokeArgs | undefined): Command
 type CommandHandler = (payload: InvokeArgs | undefined) => unknown;
 
 const COMMAND_HANDLERS: Record<string, CommandHandler> = {
-  get_catalog: () => buildCatalog(scenario.platform),
-  inspect_paths: (payload) => inspectPaths(argumentsAs<{ paths: string[] }>(payload).paths),
+  get_catalog: () => getCatalog(),
+  inspect_input_paths: (payload) => inspectPathsWhenReleased(argumentsAs<{ paths: string[] }>(payload).paths),
   convert_files: (payload) => {
     const { request, onEvent } = argumentsAs<{ request: ConversionRequest; onEvent: Channel<ConversionEvent> }>(payload);
     return convertFiles(request, onEvent);
@@ -290,10 +342,16 @@ const COMMAND_HANDLERS: Record<string, CommandHandler> = {
   "plugin:dialog|open": (payload) => openDialog(argumentsAs<{ options: OpenDialogOptions }>(payload).options),
   "plugin:store|load": () => STORE_RESOURCE_ID,
   "plugin:store|get": () => readStoredPreferences(),
-  "plugin:store|set": (payload) => storeValue(argumentsAs<{ value: Partial<Preferences> }>(payload).value),
+  "plugin:store|set": (payload) => storeValue(argumentsAs<{ value: SavedSettings }>(payload).value),
 };
 
 function handleCommand(command: string, payload: InvokeArgs | undefined): unknown {
+  // Like Rust, a failing command rejects with a plain string.
+  const failureMessage = scenario.failingCommands[command];
+  if (failureMessage !== undefined) {
+    return Promise.reject(failureMessage);
+  }
+
   const commandHandler = COMMAND_HANDLERS[command];
   if (!commandHandler) {
     throw new Error(`The mock backend has no handler for ${command}`);
@@ -323,7 +381,14 @@ const controls: MockBackendControls = {
   emitDragEvent: (type, paths) => emit(DRAG_EVENT_NAMES[type], { paths, position: { x: 0, y: 0 } }),
   sendFileEvent,
   failBatch,
+  endBatchEarly,
+  holdScans: () => {
+    isHoldingScans = true;
+  },
+  releaseScans,
+  releaseCatalog: () => releaseHeldCatalog(),
   requestWindowClose: () => emit(CLOSE_REQUESTED_EVENT, null),
+  requestQuitFromMenu: () => emit(QUIT_REQUESTED_EVENT, null),
   readLog: () => backendLog,
 };
 
