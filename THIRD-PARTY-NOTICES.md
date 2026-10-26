@@ -53,6 +53,8 @@ These npm packages are built into the app's user interface.
 | [@internationalized/date](https://github.com/adobe/react-spectrum/tree/main/packages/@internationalized/date) | 3.12.4 | Apache-2.0 |
 | [@lucide/svelte](https://lucide.dev) | 1.61.0 | ISC |
 | [@tailwindcss/typography](https://github.com/tailwindlabs/tailwindcss-typography) | 0.5.20 | MIT |
+| [@tanstack/svelte-virtual](https://tanstack.com/virtual) | 3.13.48 | MIT |
+| [@tanstack/virtual-core](https://tanstack.com/virtual) | 3.19.7 | MIT |
 | [@tauri-apps/api](https://github.com/tauri-apps/tauri#readme) | 2.12.4 | Apache-2.0 OR MIT |
 | [@tauri-apps/plugin-dialog](https://github.com/tauri-apps/plugins-workspace) | 2.8.3 | MIT OR Apache-2.0 |
 | [@tauri-apps/plugin-opener](https://github.com/tauri-apps/plugins-workspace) | 2.7.2 | MIT OR Apache-2.0 |
@@ -954,6 +956,32 @@ SOFTWARE.
 MIT License
 
 Copyright (c) Tailwind Labs, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+````
+
+### @tanstack/svelte-virtual 3.13.48, @tanstack/virtual-core 3.19.7
+
+````text
+MIT License
+
+Copyright (c) 2021-present Tanner Linsley
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
