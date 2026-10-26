@@ -22,7 +22,7 @@ const PLATFORMS: PlatformExpectations[] = [
     openHint: ["⌘", "O"],
     convertHint: ["⌘", "↩"],
     settingsHint: ["⌘", ","],
-    helpHint: ["⌘", "?"],
+    helpHint: ["F1"],
     revealLabel: "Show in Finder",
   },
   {
@@ -171,13 +171,12 @@ test("HEIC output is only offered on macOS", async ({ page }) => {
   await expect(page.getByRole("radio", { name: "HEIC" })).toHaveCount(0);
 });
 
-test("⌘? opens and closes Help on macOS", async ({ page }) => {
-  await launchConverter(page, { platform: "macos" });
+test("Converter Help in the macOS Help menu opens Help", async ({ page }) => {
+  const backend = await launchConverter(page, { platform: "macos" });
   const helpButton = page.getByRole("banner").getByRole("button", { name: "Help" });
 
-  await page.keyboard.press("Meta+Shift+Slash");
-  await expect(helpButton).toHaveAttribute("aria-pressed", "true");
+  await backend.requestHelpFromMenu();
 
-  await page.keyboard.press("Meta+?");
-  await expect(helpButton).toHaveAttribute("aria-pressed", "false");
+  await expect(helpButton).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("navigation", { name: "Help pages" })).toBeVisible();
 });

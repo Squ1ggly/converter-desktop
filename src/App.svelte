@@ -4,6 +4,7 @@
   import { toast } from "svelte-sonner";
   import type { Event as TauriEvent } from "@tauri-apps/api/event";
   import { getCurrentWebview, type DragDropEvent } from "@tauri-apps/api/webview";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { Toaster } from "$lib/components/ui/sonner/index.js";
   import * as Tooltip from "$lib/components/ui/tooltip/index.js";
   import BusyState from "$lib/components/BusyState.svelte";
@@ -26,7 +27,7 @@
   import { QuitGuard } from "$lib/quit-guard.svelte";
   import { FileQueue } from "$lib/queue.svelte";
   import { UNKNOWN_PLATFORM, shortcutFor, type Shortcut } from "$lib/shortcuts";
-  import type { AppView } from "$lib/views";
+  import { HELP_REQUESTED_EVENT, type AppView } from "$lib/views";
 
   const queue = new FileQueue();
   const preferenceStore = new PreferenceStore();
@@ -179,10 +180,14 @@
     void initialise();
     const stopDragDropPromise = getCurrentWebview().onDragDropEvent(handleDragDrop);
     const stopCloseGuardPromise = quitGuard.listen();
+    const stopHelpMenuPromise = getCurrentWindow().listen(HELP_REQUESTED_EVENT, () => {
+      view = "help";
+    });
 
     return () => {
       void stopDragDropPromise.then((stopListening) => stopListening());
       void stopCloseGuardPromise.then((stopListening) => stopListening());
+      void stopHelpMenuPromise.then((stopListening) => stopListening());
     };
   });
 

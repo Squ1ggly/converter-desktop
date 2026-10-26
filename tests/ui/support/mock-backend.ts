@@ -50,6 +50,7 @@ type DialogResult = string[] | string | null;
 
 const CLOSE_REQUESTED_EVENT = "tauri://close-requested";
 const QUIT_REQUESTED_EVENT = "quit-requested";
+const HELP_REQUESTED_EVENT = "help-requested";
 // Like the backend, one add stops at this many files (MAX_INSPECTED_FILES in input_files.rs).
 const MAX_INSPECTED_FILES = 10_000;
 const DRAG_EVENT_NAMES: Record<DragEventType, string> = {
@@ -389,6 +390,7 @@ const controls: MockBackendControls = {
   releaseCatalog: () => releaseHeldCatalog(),
   requestWindowClose: () => emit(CLOSE_REQUESTED_EVENT, null),
   requestQuitFromMenu: () => emit(QUIT_REQUESTED_EVENT, null),
+  requestHelpFromMenu: () => emit(HELP_REQUESTED_EVENT, null),
   readLog: () => backendLog,
 };
 
