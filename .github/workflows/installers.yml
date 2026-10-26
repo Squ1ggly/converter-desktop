@@ -66,9 +66,17 @@ jobs:
             container: ubuntu:22.04
     runs-on: ${{ matrix.runner }}
     container: ${{ matrix.container }}
-    timeout-minutes: 60
+    # SignPath signing waits for a person to approve each request.
+    timeout-minutes: ${{ contains(matrix.target, 'windows') && 180 || 60 }}
+    permissions:
+      # SignPath reads the job's details and downloads the unsigned files from the run.
+      actions: read
+      contents: read
     env:
       TARGET: ${{ matrix.target }}
+      # Releases sign Windows builds through SignPath when the repository has its variables set.
+      # docs/development/releasing.md explains the setup.
+      SIGN_WITH_SIGNPATH: ${{ inputs.sign && contains(matrix.target, 'windows') && vars.SIGNPATH_ORGANIZATION_ID != '' }}
     defaults:
       run:
         shell: bash
@@ -118,7 +126,7 @@ jobs:
           fi
 
       - name: Set up Windows signing
-        if: runner.os == 'Windows' && inputs.sign
+        if: runner.os == 'Windows' && inputs.sign && env.SIGN_WITH_SIGNPATH != 'true'
         shell: pwsh
         env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
@@ -131,6 +139,7 @@ jobs:
         run: ./scripts/release/windows-signing-config.ps1
 
       - name: Build the installers
+        if: env.SIGN_WITH_SIGNPATH != 'true'
         env:
           APPLE_CERTIFICATE: ${{ inputs.sign && secrets.APPLE_CERTIFICATE || '' }}
           APPLE_CERTIFICATE_PASSWORD: ${{ inputs.sign && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
@@ -144,6 +153,71 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ inputs.sign && secrets.AZURE_CLIENT_SECRET || '' }}
           AZURE_TENANT_ID: ${{ inputs.sign && secrets.AZURE_TENANT_ID || '' }}
         run: bash scripts/release/build-installers.sh
+
+      # With SignPath, the app is signed first, then bundled and the installers are signed.
+      - name: Build the app
+        if: env.SIGN_WITH_SIGNPATH == 'true'
+        run: |
+          bash scripts/release/build-installers.sh app
+          echo "APP_VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")" >> "$GITHUB_ENV"
+
+      - name: Upload the app for signing
+        id: unsigned-app
+        if: env.SIGN_WITH_SIGNPATH == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-app-${{ matrix.target }}
+          path: src-tauri/target/${{ matrix.target }}/release/converter.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign the app
+        if: env.SIGN_WITH_SIGNPATH == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: app
+          github-artifact-id: ${{ steps.unsigned-app.outputs.artifact-id }}
+          parameters: |
+            version: "${{ env.APP_VERSION }}"
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed-app
+
+      - name: Build the installers from the signed app
+        if: env.SIGN_WITH_SIGNPATH == 'true'
+        env:
+          INSTALLERS_DIRECTORY: unsigned-installers
+        run: |
+          cp signed-app/converter.exe "src-tauri/target/$TARGET/release/converter.exe"
+          bash scripts/release/build-installers.sh bundle
+
+      - name: Upload the installers for signing
+        id: unsigned-installers
+        if: env.SIGN_WITH_SIGNPATH == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-installers-${{ matrix.target }}
+          path: unsigned-installers/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign the installers
+        if: env.SIGN_WITH_SIGNPATH == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: installers
+          github-artifact-id: ${{ steps.unsigned-installers.outputs.artifact-id }}
+          parameters: |
+            version: "${{ env.APP_VERSION }}"
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: installers
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

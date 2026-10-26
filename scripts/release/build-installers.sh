@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Builds the installers for $TARGET and copies them into installers/.
+# Builds the installers for $TARGET and copies them into $INSTALLERS_DIRECTORY (installers/ by
+# default).
+#
+#   build-installers.sh          builds the app and its installers
+#   build-installers.sh app      builds only the app, so it can be signed before bundling
+#   build-installers.sh bundle   builds the installers from the app built earlier
 #
 # CI passes every signing secret as an environment variable, empty when the secret doesn't exist.
 # Empty ones are removed first, so without secrets Tauri ad-hoc signs on macOS and leaves Windows
@@ -35,10 +40,26 @@ if [ -n "${WINDOWS_SIGNING_CONFIG:-}" ]; then
   build_arguments+=(--config "$WINDOWS_SIGNING_CONFIG")
 fi
 
-pnpm tauri build "${build_arguments[@]}"
+stage=${1:-all}
+installers_directory=${INSTALLERS_DIRECTORY:-installers}
 
-mkdir -p installers
+case "$stage" in
+  all) pnpm tauri build "${build_arguments[@]}" ;;
+  app)
+    pnpm tauri build "${build_arguments[@]}" --no-bundle
+    exit 0
+    ;;
+  # Bundling normally writes the bundle type into the app, which would break its signature. The
+  # app has no updater, which is the only thing that reads it.
+  bundle) pnpm tauri bundle "${build_arguments[@]}" --no-binary-patching ;;
+  *)
+    echo "Unknown stage: $stage" >&2
+    exit 1
+    ;;
+esac
+
+mkdir -p "$installers_directory"
 find "src-tauri/target/$TARGET/release/bundle" -type f \
   \( -name '*.dmg' -o -name '*-setup.exe' -o -name '*.msi' -o -name '*.deb' -o -name '*.rpm' \) \
-  -exec cp {} installers/ \;
-ls -l installers
+  -exec cp {} "$installers_directory/" \;
+ls -l "$installers_directory"

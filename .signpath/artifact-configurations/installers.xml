@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration "installers": the NSIS and MSI installers of one architecture. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true"/>
+  </parameters>
+  <zip-file>
+    <pe-file path="Converter_${version}_*-setup.exe" product-name="Converter" product-version="${version}">
+      <authenticode-sign/>
+    </pe-file>
+    <msi-file path="Converter_${version}_*.msi">
+      <authenticode-sign/>
+    </msi-file>
+  </zip-file>
+</artifact-configuration>
