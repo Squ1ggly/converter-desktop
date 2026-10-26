@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Convert images and videos on your computer"
 authors = ["Squ1ggly"]
 license = "MIT"
-repository = ""
+repository = "https://github.com/Squ1ggly/converter-desktop"
 edition = "2024"
 rust-version = "1.92"
 

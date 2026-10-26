@@ -3,7 +3,8 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
-// Windows builds render in WebView2 (Chromium); macOS and Linux use WebKit.
+// Windows builds render in WebView2 (Chromium); macOS and Linux use WebKit. These are the oldest
+// engines Tailwind CSS v4 supports.
 const isWindowsBuild = process.env.TAURI_ENV_PLATFORM === "windows";
 
 export default defineConfig({
@@ -19,7 +20,7 @@ export default defineConfig({
     watch: { ignored: ["**/src-tauri/**"] },
   },
   build: {
-    target: isWindowsBuild ? "chrome111" : "safari15",
+    target: isWindowsBuild ? "chrome111" : "safari16.4",
     outDir: "dist",
     emptyOutDir: true,
   },

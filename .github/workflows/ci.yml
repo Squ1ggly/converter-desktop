@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-  # Started by the Release workflow for release PRs.
+  # Started by the Release workflow for the open release PR.
   workflow_dispatch:
 
 concurrency:
@@ -18,11 +18,31 @@ jobs:
   workflows:
     name: Lint workflows
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker://rhysd/actionlint:1.7.12
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 # 1.7.12
         with:
           args: -color
+
+  notices:
+    name: Third-party notices
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup
+
+      - name: Regenerate THIRD-PARTY-NOTICES.md
+        run: pnpm notices
+
+      - name: Check it is up to date
+        run: |
+          if ! git diff --exit-code -- THIRD-PARTY-NOTICES.md; then
+            echo "::error file=THIRD-PARTY-NOTICES.md::THIRD-PARTY-NOTICES.md is out of date. Run 'pnpm notices' and commit the result."
+            exit 1
+          fi
 
   check:
     name: Check (${{ matrix.os }})
@@ -31,9 +51,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
@@ -41,22 +62,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - uses: ./.github/actions/setup
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri -> target
-
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
 
       - name: Download the bundled FFmpeg
         run: pnpm fetch-ffmpeg
@@ -72,7 +82,7 @@ jobs:
 
       - name: Upload UI test traces
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ui-test-results-${{ matrix.os }}
           path: test-results/
@@ -99,9 +109,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Linux build and WebDriver dependencies
         if: runner.os == 'Linux'
@@ -109,9 +120,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf webkitgtk-webdriver xvfb
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri -> target
 
@@ -137,15 +148,6 @@ jobs:
           New-Item -Path $key -Force | Out-Null
           New-ItemProperty -Path $key -Name "converter.exe" -Value "--remote-debugging-port=0" -Force | Out-Null
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
       - name: Download the bundled FFmpeg
         run: pnpm fetch-ffmpeg
 
@@ -162,7 +164,7 @@ jobs:
 
       - name: Upload the app logs
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-app-logs-${{ matrix.os }}
           path: ${{ runner.os == 'Windows' && '~/AppData/Local/com.squ1ggly.converter/logs/' || '~/.local/share/com.squ1ggly.converter/logs/' }}
