@@ -14,8 +14,7 @@ sidecar.
    classifies each file as an image, a video or unsupported. Symlinked folders inside a folder
    are skipped, and it stops after 10,000 files, returning `isFileLimitReached: true`. Image
    files are added to the asset protocol scope so the UI can show thumbnails. Nothing else is
-   readable by the webview. `inspect_paths` returns the same files without the flag, for the
-   UI until it moves to `inspect_input_paths`.
+   readable by the webview.
 3. **Convert** sends one `convert_files` request per kind (one for images, one for videos), each
    with its own settings. Both run at the same time.
 4. Each request is a batch. Images run in parallel, up to four at once or one per core if there are fewer. Videos run one at a time.

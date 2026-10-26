@@ -24,7 +24,7 @@ declare global {
 
 // WebDriver can't use native file dialogs, so files are added as a drop is:
 // by emitting the webview's drag-drop event. The app's own listener handles
-// it and calls the real inspect_paths command.
+// it and calls the real inspect_input_paths command.
 async function dropFiles(paths: string[]): Promise<void> {
   await browser.execute(
     (droppedPaths) =>
