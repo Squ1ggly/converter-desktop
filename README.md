@@ -18,9 +18,8 @@ FFmpeg is bundled, and no files are uploaded.
 
 ## Install
 
-Installers will be attached to each
-[GitHub release](https://github.com/Squ1ggly/converter-desktop/releases). No release has been
-published yet, so for now build the app from source as described under [Development](#development).
+Download the installer for your platform from the
+[latest release](https://github.com/Squ1ggly/converter-desktop/releases/latest).
 
 The builds are unsigned. [Installing](docs/installing.md) explains how to open them on each
 platform.
