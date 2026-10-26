@@ -104,6 +104,10 @@ export class MockBackend {
     await this.#page.evaluate(() => window.converterMockBackend.requestQuitFromMenu());
   }
 
+  async requestHelpFromMenu(): Promise<void> {
+    await this.#page.evaluate(() => window.converterMockBackend.requestHelpFromMenu());
+  }
+
   async readLog(): Promise<BackendLog> {
     const backendLog = await this.#page.evaluate(() => window.converterMockBackend.readLog());
     return backendLog;

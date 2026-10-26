@@ -24,8 +24,8 @@ export function shortcutKeys(shortcut: Shortcut, platform: string): string[] {
     open: [modifierKey, "O"],
     convert: [modifierKey, enterKey],
     settings: [modifierKey, ","],
-    // F1 needs fn on most Mac keyboards, so macOS shows ⌘? (F1 works too).
-    help: isMac ? [modifierKey, "?"] : ["F1"],
+    // On macOS, ⌘? belongs to the system Help menu, which lists Converter Help.
+    help: ["F1"],
   };
   const keys = keysByShortcut[shortcut];
   return keys;
@@ -34,12 +34,6 @@ export function shortcutKeys(shortcut: Shortcut, platform: string): string[] {
 function isPrimaryModifierPressed(event: KeyboardEvent, platform: string): boolean {
   const isPressed = platform === "macos" ? event.metaKey : event.ctrlKey;
   return isPressed;
-}
-
-// "?" is Shift+/ on US keyboards; with ⌘ held, some layouts report the unshifted key.
-function isQuestionMark(event: KeyboardEvent): boolean {
-  const isQuestionMarkKey = event.key === "?" || (event.code === "Slash" && event.shiftKey);
-  return isQuestionMarkKey;
 }
 
 export function shortcutFor(event: KeyboardEvent, platform: string): Shortcut | null {
@@ -52,10 +46,6 @@ export function shortcutFor(event: KeyboardEvent, platform: string): Shortcut | 
   if (!isPrimaryModifierPressed(event, platform)) {
     return null;
   }
-  if (platform === "macos" && isQuestionMark(event)) {
-    return "help";
-  }
-
   const shortcut = KEYS_WITH_PRIMARY_MODIFIER[event.key.toLowerCase()] ?? null;
   return shortcut;
 }

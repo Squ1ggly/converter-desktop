@@ -12,6 +12,8 @@ mod formats;
 mod heif_test_files;
 mod image_conversion;
 mod input_files;
+#[cfg(target_os = "macos")]
+mod macos_menu;
 mod options;
 mod output_path;
 mod quit;
@@ -85,8 +87,8 @@ pub fn run() {
 
     #[cfg(target_os = "macos")]
     let builder = builder
-        .menu(quit::build_macos_menu)
-        .on_menu_event(quit::handle_menu_event);
+        .menu(macos_menu::build_macos_menu)
+        .on_menu_event(macos_menu::handle_menu_event);
 
     let app = builder
         .build(tauri::generate_context!())

@@ -61,6 +61,8 @@ export interface MockBackendControls {
   requestWindowClose(): Promise<void>;
   // Like ⌘Q or Quit in the macOS app menu while a conversion runs.
   requestQuitFromMenu(): Promise<void>;
+  // Like Help > Converter Help in the macOS menu bar.
+  requestHelpFromMenu(): Promise<void>;
   readLog(): BackendLog;
 }
 
